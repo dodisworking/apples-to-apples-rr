@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apples to Apples — Rent Roll Reconciliation</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+      }
+    })
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Crect x='10' y='3' width='2' height='2' fill='%23166534'/%3E%3Crect x='12' y='5' width='2' height='2' fill='%23166534'/%3E%3Crect x='14' y='8' width='4' height='2' fill='%23dc2626'/%3E%3Crect x='12' y='10' width='8' height='2' fill='%23ef4444'/%3E%3Crect x='10' y='12' width='12' height='10' fill='%23dc2626'/%3E%3Crect x='12' y='22' width='8' height='2' fill='%23dc2626'/%3E%3Crect x='14' y='24' width='4' height='2' fill='%23b91c1c'/%3E%3Crect x='12' y='14' width='2' height='2' fill='%23fca5a5'/%3E%3C/svg%3E">
+</head>
+<body>
+  <main class="app">
+
+    <!-- ─── Top bar ───────────────────────────────────────── -->
+    <header class="topbar">
+      <div class="brand">
+        <svg class="logo-svg" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+          <!-- 32-bit apple -->
+          <rect x="10" y="3" width="2" height="2" fill="#166534"/>
+          <rect x="12" y="5" width="2" height="2" fill="#166534"/>
+          <rect x="14" y="8" width="4" height="2" fill="#dc2626"/>
+          <rect x="12" y="10" width="8" height="2" fill="#ef4444"/>
+          <rect x="10" y="12" width="12" height="10" fill="#dc2626"/>
+          <rect x="12" y="22" width="8" height="2" fill="#dc2626"/>
+          <rect x="14" y="24" width="4" height="2" fill="#b91c1c"/>
+          <rect x="12" y="14" width="2" height="2" fill="#fca5a5"/>
+        </svg>
+        <div class="brand-text">
+          <h1>Apples to Apples</h1>
+          <p>Argus × Client rent roll reconciliation</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="mode-select" role="radiogroup" aria-label="Model">
+          <label class="mode-opt">
+            <input type="radio" name="mode" value="dumb">
+            <span>🥔 <b>Dumb</b><small>Haiku</small></span>
+          </label>
+          <label class="mode-opt active">
+            <input type="radio" name="mode" value="regular" checked>
+            <span>🍎 <b>Regular</b><small>Sonnet</small></span>
+          </label>
+          <label class="mode-opt">
+            <input type="radio" name="mode" value="deluxe">
+            <span>🧀 <b>Deluxe</b><small>Opus</small></span>
+          </label>
+        </div>
+      </div>
+    </header>
+
+    <!-- ─── STAGE 1: UPLOAD ───────────────────────────────── -->
+    <section id="stage-upload" class="stage active">
+      <div class="stage-intro">
+        <h2 class="stage-title">Drop your two rent rolls</h2>
+        <p class="stage-sub">Argus on one side, Client on the other. We'll figure out which is which. <b>PDF or XLSX</b>, any combo.</p>
+      </div>
+
+      <div class="drop-grid">
+        <div class="drop-slot" id="slotA">
+          <input type="file" id="inputA" accept=".pdf,.xlsx,.xls">
+          <div class="drop-art">
+            <svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true" class="apple-svg">
+              <rect x="10" y="3" width="2" height="2" fill="#166534"/>
+              <rect x="12" y="5" width="2" height="2" fill="#166534"/>
+              <rect x="14" y="8" width="4" height="2" fill="#dc2626"/>
+              <rect x="12" y="10" width="8" height="2" fill="#ef4444"/>
+              <rect x="10" y="12" width="12" height="10" fill="#dc2626"/>
+              <rect x="12" y="22" width="8" height="2" fill="#dc2626"/>
+              <rect x="14" y="24" width="4" height="2" fill="#b91c1c"/>
+              <rect x="12" y="14" width="2" height="2" fill="#fca5a5"/>
+            </svg>
+          </div>
+          <div class="drop-label">File A</div>
+          <div class="drop-hint">Drag &amp; drop or click</div>
+          <div class="drop-filename" id="nameA"></div>
+        </div>
+        <div class="drop-slot" id="slotB">
+          <input type="file" id="inputB" accept=".pdf,.xlsx,.xls">
+          <div class="drop-art">
+            <svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true" class="pear-svg">
+              <rect x="14" y="3" width="2" height="2" fill="#365314"/>
+              <rect x="12" y="6" width="2" height="2" fill="#65a30d"/>
+              <rect x="14" y="6" width="4" height="2" fill="#84cc16"/>
+              <rect x="12" y="8" width="8" height="3" fill="#a3e635"/>
+              <rect x="11" y="11" width="10" height="4" fill="#bef264"/>
+              <rect x="10" y="15" width="12" height="6" fill="#a3e635"/>
+              <rect x="11" y="21" width="10" height="3" fill="#84cc16"/>
+              <rect x="13" y="24" width="6" height="2" fill="#65a30d"/>
+              <rect x="13" y="13" width="2" height="2" fill="#d9f99d"/>
+            </svg>
+          </div>
+          <div class="drop-label">File B</div>
+          <div class="drop-hint">Drag &amp; drop or click</div>
+          <div class="drop-filename" id="nameB"></div>
+        </div>
+      </div>
+
+      <div class="stage-actions">
+        <button id="goDetect" class="btn primary" disabled>Continue →</button>
+      </div>
+    </section>
+
+    <!-- ─── STAGE 2: CONFIRM ──────────────────────────────── -->
+    <section id="stage-confirm" class="stage">
+      <div class="stage-intro">
+        <h2 class="stage-title">Apple or pear?</h2>
+        <p class="stage-sub">We sniffed the files. Swap if we got it wrong.</p>
+      </div>
+
+      <div class="confirm-grid">
+        <div class="confirm-card apple" id="argusCard">
+          <div class="confirm-badge"><span class="emoji">🍎</span> <b>APPLE</b> · Argus</div>
+          <div class="confirm-filename" id="argusFilename">—</div>
+          <div class="confirm-hits" id="argusHits"></div>
+        </div>
+        <button id="swap" class="swap-btn" title="Swap">⇄</button>
+        <div class="confirm-card pear" id="clientCard">
+          <div class="confirm-badge"><span class="emoji">🍐</span> <b>PEAR</b> · Client</div>
+          <div class="confirm-filename" id="clientFilename">—</div>
+          <div class="confirm-hits" id="clientHits"></div>
+        </div>
+      </div>
+
+      <div class="stage-actions">
+        <button id="backToUpload" class="btn ghost">← Back</button>
+        <button id="goCompare" class="btn primary">Turn pear into apple →</button>
+      </div>
+    </section>
+
+    <!-- ─── STAGE 3: PROCESS ──────────────────────────────── -->
+    <section id="stage-process" class="stage">
+      <div class="stage-intro">
+        <h2 class="stage-title pixel" id="processHeadline">Turning pear into apple…</h2>
+      </div>
+
+      <div class="kitchen">
+        <div class="transform-row">
+          <svg viewBox="0 0 32 32" shape-rendering="crispEdges" class="big-fruit apple">
+            <rect x="10" y="3" width="2" height="2" fill="#166534"/>
+            <rect x="12" y="5" width="2" height="2" fill="#166534"/>
+            <rect x="14" y="8" width="4" height="2" fill="#dc2626"/>
+            <rect x="12" y="10" width="8" height="2" fill="#ef4444"/>
+            <rect x="10" y="12" width="12" height="10" fill="#dc2626"/>
+            <rect x="12" y="22" width="8" height="2" fill="#dc2626"/>
+            <rect x="14" y="24" width="4" height="2" fill="#b91c1c"/>
+            <rect x="12" y="14" width="2" height="2" fill="#fca5a5"/>
+          </svg>
+          <div class="arrow" id="transformArrow">→</div>
+          <div class="big-fruit morph" id="morphFruit">
+            <svg viewBox="0 0 32 32" shape-rendering="crispEdges">
+              <rect x="14" y="3" width="2" height="2" fill="#365314"/>
+              <rect x="12" y="6" width="2" height="2" fill="#65a30d"/>
+              <rect x="14" y="6" width="4" height="2" fill="#84cc16"/>
+              <rect x="12" y="8" width="8" height="3" fill="#a3e635"/>
+              <rect x="11" y="11" width="10" height="4" fill="#bef264"/>
+              <rect x="10" y="15" width="12" height="6" fill="#a3e635"/>
+              <rect x="11" y="21" width="10" height="3" fill="#84cc16"/>
+              <rect x="13" y="24" width="6" height="2" fill="#65a30d"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress-shell">
+        <div class="progress-stage pixel" id="processStage">PARSING ARGUS</div>
+        <div class="progress-bar"><div class="progress-fill" id="processFill"></div></div>
+        <div class="progress-message" id="processMessage">Reading the rent roll…</div>
+        <div class="progress-elapsed" id="processElapsed">0s</div>
+        <div class="stage-actions">
+          <button id="cancelProcess" class="btn ghost">✋ Stop</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── STAGE 4: REVIEW (side-by-side) ────────────────── -->
+    <section id="stage-review" class="stage">
+      <div class="review-header">
+        <div class="review-title">
+          <h2 id="propertyName">Property</h2>
+          <p id="propertyMeta">…</p>
+        </div>
+        <div class="review-stats" id="reviewStats"></div>
+        <div class="review-actions">
+          <button id="downloadXlsx" class="btn primary">⬇ Export Excel (with your reviews)</button>
+          <button id="restart" class="btn ghost">Start over</button>
+        </div>
+      </div>
+
+      <!-- Filter chips + view toggle -->
+      <div class="review-toolbar">
+        <div class="filter-chips" id="filterChips">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="diffs">Differences only</button>
+          <button class="chip" data-filter="argusOnly">Argus only</button>
+          <button class="chip" data-filter="clientOnly">Client only</button>
+          <button class="chip" data-filter="clean">Clean matches</button>
+        </div>
+        <div class="view-toggle">
+          <label class="view-opt active">
+            <input type="radio" name="view" value="as-argus" checked>
+            <span>🍎 ↔ 🍎 Client as Argus</span>
+          </label>
+          <label class="view-opt">
+            <input type="radio" name="view" value="original">
+            <span>🍎 ↔ 🍐 Client as Original</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="notes-bar" id="notesBar"></div>
+
+      <!-- Side-by-side table -->
+      <div class="sbs-wrap">
+        <div class="sbs-table" id="sbsTable">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Drawer ────────────────────────────────────────── -->
+    <div class="drawer" id="drawer" aria-hidden="true">
+      <div class="drawer-scrim" id="drawerScrim"></div>
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div class="drawer-title" id="drawerTitle">—</div>
+          <button class="drawer-close" id="drawerClose">✕</button>
+        </div>
+        <div class="drawer-body" id="drawerBody"></div>
+        <div class="drawer-preview" id="drawerPreview">
+          <div class="preview-toolbar">
+            <div class="preview-toolbar-title">Source documents <small>(red box marks the match location)</small></div>
+            <button id="togglePreview" class="btn ghost btn-sm">📄 Show sources</button>
+          </div>
+          <div class="preview-grid" id="previewGrid" hidden>
+            <div class="preview-side preview-apple">
+              <div class="preview-side-label">🍎 Apple · Argus</div>
+              <div class="preview-canvas-wrap" id="previewArgus"></div>
+            </div>
+            <div class="preview-side preview-pear">
+              <div class="preview-side-label">🍐 Pear · Client (original)</div>
+              <div class="preview-canvas-wrap" id="previewClient"></div>
+            </div>
+          </div>
+        </div>
+        <div class="drawer-foot">
+          <div class="review-buttons">
+            <button class="btn-review good"  data-verdict="good">👍 Real discrepancy</button>
+            <button class="btn-review bad"   data-verdict="bad">👎 False positive</button>
+            <button class="btn-review clear" data-verdict="none">↺ Clear</button>
+          </div>
+          <textarea id="reviewNote" class="review-note" placeholder="Optional note (carried into your Excel export)…"></textarea>
+          <div class="drawer-nav">
+            <button class="btn ghost btn-sm" id="drawerPrev">← Prev</button>
+            <button class="btn ghost btn-sm" id="drawerNext">Next →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <span>🍎 Argus is always an apple. 🍐 Client is always a pear. The job is turning pear into apple.</span>
+      <span id="health">·</span>
+    </footer>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

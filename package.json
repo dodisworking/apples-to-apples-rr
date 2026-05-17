@@ -1,0 +1,21 @@
+{
+  "name": "apples-to-apples-rr",
+  "version": "1.0.0",
+  "description": "Apples to Apples — turn a Client (Pear) rent roll into an Argus (Apple) rent roll so you can compare apples to apples",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "pdf-parse": "^1.1.1"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  }
+}
