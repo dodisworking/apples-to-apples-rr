@@ -73,21 +73,44 @@ app.post('/api/compare', async (req, res) => {
               'claude-sonnet-4-6'
     console.log(`[compare] mode=${mode || 'regular'} model=${m} argus=${argus.name} client=${client.name}`)
 
-    emit('progress', { stage: 'parsing-argus', pct: 10, msg: 'Parsing Argus rent roll…' })
+    // ── Step 1: parse Argus ──────────────────────────────
+    emit('progress', { stage: 'parsing-argus', pct: 8, msg: 'Parsing Argus rent roll…' })
     const argusBuf = Buffer.from(argus.base64, 'base64')
     const parsedArgus = await parseFile(argusBuf, argus.name)
     const argusParsed = parseArgusFromSheets(parsedArgus.sheets)
     console.log(`[compare] argus: ${argusParsed.tenants.length} tenants, ${argusParsed.totalSF.toLocaleString()} SF`)
 
-    emit('progress', { stage: 'parsing-client', pct: 25, msg: 'Reading client rent roll…' })
+    if (!argusParsed.tenants?.length) {
+      throw new Error('Argus rent roll parsed empty — make sure the 🍎 Apples slot contains an Argus Lease Summary Report (xlsx). If you uploaded the files in the wrong slots, click ✕ and swap.')
+    }
+
+    // ── Step 2: parse client (Pear) ──────────────────────
+    emit('progress', { stage: 'parsing-client', pct: 18, msg: 'Reading client rent roll…' })
     const clientBuf = Buffer.from(client.base64, 'base64')
     const parsedClient = await parseFile(clientBuf, client.name)
 
-    emit('progress', { stage: 'normalizing', pct: 45, msg: 'Turning pear into apple — normalizing client to Argus format…' })
+    // ── Step 3: normalize Pear → Apple ───────────────────
+    emit('progress', { stage: 'normalizing', pct: 38, msg: 'Turning pear into apple — normalizing client to Argus format…' })
     const clientNormalized = await normalizeClient({ parsed: parsedClient, filename: client.name, model: m })
     console.log(`[compare] client: ${clientNormalized.tenants.length} tenants, reported ${clientNormalized.topLevelTotalSF || '?'} SF`)
 
-    emit('progress', { stage: 'reconciling', pct: 80, msg: 'Matching and diffing apple to apple…' })
+    // ── Steps 4-8: walk the spec checks in order ─────────
+    // The actual reconcile() runs in one shot (pure JS, fast), but we emit
+    // granular events so the user sees each check from the Word doc tick off.
+    emit('progress', { stage: 'check-totals',   pct: 55, msg: 'Confirming property total SF (Argus col 2) — excluding options & reabsorbed suites…' })
+    await tick()
+    emit('progress', { stage: 'check-suite',    pct: 65, msg: 'Suite-by-suite (Argus col 1) — tenant name, suite, lease begin/end…' })
+    await tick()
+    emit('progress', { stage: 'check-baserent', pct: 73, msg: 'Base rent (Argus col 4) — comparing $/SF/yr with $0.02 rounding tolerance…' })
+    await tick()
+    emit('progress', { stage: 'check-steps',    pct: 81, msg: 'Rent steps (Argus cols 5–7) — date + amount per step…' })
+    await tick()
+    emit('progress', { stage: 'check-freerent', pct: 86, msg: 'Free rent (Argus col 9) — months or % abatement…' })
+    await tick()
+    emit('progress', { stage: 'check-pctrent',  pct: 90, msg: '% rent (Argus col 10) — breakpoint + overage %…' })
+    await tick()
+
+    // ── Run reconciliation (one shot, fast) ──────────────
     const result = reconcile({ argus: argusParsed, client: clientNormalized })
 
     emit('progress', { stage: 'rendering', pct: 95, msg: 'Plating up Excel report…' })
@@ -140,6 +163,9 @@ app.post('/api/export', async (req, res) => {
     res.status(500).json({ error: e.message })
   }
 })
+
+// Tiny delay so each granular check stage gets its own paint frame on the client.
+const tick = () => new Promise(r => setTimeout(r, 180))
 
 function slug(s) {
   return String(s).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'property'

@@ -52,10 +52,20 @@ function handleFile(file, key, slot, nameEl) {
 wireDrop('#slotA', '#inputA', '#nameA', 'fileA')
 wireDrop('#slotB', '#inputB', '#nameB', 'fileB')
 
-// ═══ Detect ═══════════════════════════════════════════
+// ═══ Continue → goes straight into analysis ══════════
+// Trust the slot labels: Apple slot (A) = Argus, Pear slot (B) = Client.
+// Auto-detect runs only as a silent sanity check — if a high-confidence mismatch
+// is found (e.g. user dropped argus in the pear slot) we show a one-tap swap before
+// committing tokens to the analysis.
 $('#goDetect').addEventListener('click', async () => {
   const btn = $('#goDetect')
   btn.disabled = true; btn.textContent = 'Sniffing…'
+
+  // Default: trust the slot labels
+  state.argusFile  = state.fileA
+  state.clientFile = state.fileB
+
+  // Silent sanity check — only block on STRONG disagreement
   try {
     const [a, b] = await Promise.all([toB64(state.fileA), toB64(state.fileB)])
     const resp = await fetch('/api/detect', {
@@ -65,21 +75,54 @@ $('#goDetect').addEventListener('click', async () => {
         fileB: { name: state.fileB.name, base64: b },
       }),
     })
-    if (!resp.ok) throw new Error(await resp.text())
-    const data = await resp.json()
-    state.argusSlot  = data.argus
-    state.clientSlot = data.client
-    state.detection  = data.detection
-    state.argusFile  = state.argusSlot  === 'A' ? state.fileA : state.fileB
-    state.clientFile = state.clientSlot === 'A' ? state.fileA : state.fileB
-    renderConfirm()
-    showStage('stage-confirm')
-  } catch (e) {
-    alert('Detection failed: ' + e.message)
-  } finally {
-    btn.disabled = false; btn.textContent = 'Continue →'
-  }
+    if (resp.ok) {
+      const data = await resp.json()
+      const aScore = data.detection?.A?.score ?? 0
+      const bScore = data.detection?.B?.score ?? 0
+      // Only intervene if files look CLEARLY swapped — B is much more Argus-y than A
+      // (≥ 8-point swing). Otherwise the slot labels win.
+      if (bScore - aScore >= 8) {
+        const ok = confirm(
+          `Heads up — your 🍐 Pears file ("${state.fileB.name}") looks like an Argus rent roll, ` +
+          `and your 🍎 Apples file ("${state.fileA.name}") doesn't. Swap them before analyzing?`
+        )
+        if (ok) { state.argusFile = state.fileB; state.clientFile = state.fileA }
+      }
+    }
+  } catch { /* silent — don't block analysis on detect failure */ }
+
+  btn.disabled = false; btn.textContent = 'Continue →'
+  startAnalysis()
 })
+
+async function startAnalysis() {
+  state.mode = document.querySelector('input[name=mode]:checked')?.value || 'regular'
+  showStage('stage-process')
+  updateProgress({ stage: 'starting', pct: 3, msg: 'Heating up…' })
+  startTimers()
+  state.abort = new AbortController()
+  try {
+    const [argusB64, clientB64] = await Promise.all([toB64(state.argusFile), toB64(state.clientFile)])
+    const resp = await fetch('/api/compare', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        argus:  { name: state.argusFile.name,  base64: argusB64  },
+        client: { name: state.clientFile.name, base64: clientB64 },
+        mode: state.mode,
+      }),
+      signal: state.abort.signal,
+    })
+    if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`)
+    await consumeSSE(resp.body)
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      alert('Compare failed: ' + e.message)
+      showStage('stage-upload')
+    }
+  } finally {
+    stopTimers()
+  }
+}
 
 function renderConfirm() {
   const d = state.detection
@@ -106,35 +149,8 @@ $('#backToUpload').addEventListener('click', () => showStage('stage-upload'))
 let elapsedTimer = null, stallTimer = null, processStart = 0, lastProgress = 0
 const STALL_MS = 240000
 
-$('#goCompare').addEventListener('click', async () => {
-  state.mode = document.querySelector('input[name=mode]:checked')?.value || 'regular'
-  showStage('stage-process')
-  updateProgress({ stage: 'starting', pct: 3, msg: 'Heating up…' })
-  startTimers()
-  state.abort = new AbortController()
-
-  try {
-    const [argusB64, clientB64] = await Promise.all([toB64(state.argusFile), toB64(state.clientFile)])
-    const resp = await fetch('/api/compare', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        argus:  { name: state.argusFile.name,  base64: argusB64  },
-        client: { name: state.clientFile.name, base64: clientB64 },
-        mode: state.mode,
-      }),
-      signal: state.abort.signal,
-    })
-    if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`)
-    await consumeSSE(resp.body)
-  } catch (e) {
-    if (e.name !== 'AbortError') {
-      alert('Compare failed: ' + e.message)
-      showStage('stage-upload')
-    }
-  } finally {
-    stopTimers()
-  }
-})
+// (Old goCompare confirm-stage button removed — Continue now starts analysis directly.)
+$('#goCompare')?.addEventListener('click', startAnalysis)
 $('#cancelProcess').addEventListener('click', () => {
   if (!state.abort) return
   state.abort.abort()
@@ -187,12 +203,19 @@ async function consumeSSE(stream) {
   }
 }
 
+// Walk the spec's check order: Property Size → Col 1 → Col 4 → Cols 5-7 → Col 9 → Col 10.
 const STAGE_TO_HEADLINE = {
-  'parsing-argus':  { label: 'PARSING ARGUS',     morph: 'stage-1' },
-  'parsing-client': { label: 'READING CLIENT',    morph: 'stage-1' },
-  'normalizing':    { label: 'PEAR → APPLE',      morph: 'stage-2' },
-  'reconciling':    { label: 'MATCHING & DIFFING',morph: 'stage-3' },
-  'rendering':      { label: 'PLATING REPORT',    morph: 'stage-done' },
+  'parsing-argus':   { label: 'PARSING ARGUS (APPLE)', morph: 'stage-1' },
+  'parsing-client':  { label: 'READING CLIENT (PEAR)', morph: 'stage-1' },
+  'normalizing':     { label: 'PEAR → APPLE',          morph: 'stage-2' },
+  'check-totals':    { label: 'CHECK: PROPERTY SIZE',  morph: 'stage-2' },
+  'check-suite':     { label: 'CHECK: COL 1 — TENANT / SUITE / DATES', morph: 'stage-3' },
+  'check-baserent':  { label: 'CHECK: COL 4 — BASE RENT',  morph: 'stage-3' },
+  'check-steps':     { label: 'CHECK: COL 5-7 — RENT STEPS', morph: 'stage-3' },
+  'check-freerent':  { label: 'CHECK: COL 9 — FREE RENT',  morph: 'stage-3' },
+  'check-pctrent':   { label: 'CHECK: COL 10 — % RENT',    morph: 'stage-3' },
+  'reconciling':     { label: 'MATCHING & DIFFING',    morph: 'stage-3' },
+  'rendering':       { label: 'PLATING REPORT',        morph: 'stage-done' },
 }
 
 function updateProgress({ stage, pct, msg }) {
