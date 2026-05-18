@@ -9,7 +9,6 @@ import { normalizeClient } from './lib/client.js'
 import { reconcile } from './lib/reconcile.js'
 import { buildExcel } from './lib/excel.js'
 import { loadAll as loadLearnings, recordBulk, forProperty, stats as learningStats } from './lib/learnings.js'
-import { xlsxToPdf, isAvailable as isLibreAvailable } from './lib/xlsx-to-pdf.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = path.dirname(__filename)
@@ -144,14 +143,6 @@ app.post('/api/compare', async (req, res) => {
 
     emit('progress', { stage: 'rendering', pct: 95, msg: 'Plating up Excel report…' })
 
-    // Convert XLSX sources to PDF for the cross-reference reviewer (true visual
-    // fidelity — looks exactly like opening the file in Excel). Graceful fallback
-    // to raw sheet rows when LibreOffice isn't available (local dev).
-    const [argusPdfBuf, clientPdfBuf] = await Promise.all([
-      parsedArgus.type  === 'xlsx' ? xlsxToPdf(argusBuf).catch(() => null) : null,
-      parsedClient.type === 'xlsx' ? xlsxToPdf(clientBuf).catch(() => null) : null,
-    ])
-
     const payload = {
       property: result.property,
       totals: result.totals,
@@ -162,12 +153,10 @@ app.post('/api/compare', async (req, res) => {
       clientTenants: clientNormalized.tenants,
       argusFileType:  parsedArgus.type,
       clientFileType: parsedClient.type,
-      // Converted PDFs (preferred for the reviewer — actual Excel-rendered pages)
-      argusPdfBase64:  argusPdfBuf  ? argusPdfBuf.toString('base64')  : null,
-      clientPdfBase64: clientPdfBuf ? clientPdfBuf.toString('base64') : null,
-      // Raw sheet rows kept as a fallback when LibreOffice didn't render
-      argusSheets:  parsedArgus.type  === 'xlsx' && !argusPdfBuf  ? parsedArgus.sheets.slice(0, 1)  : null,
-      clientSheets: parsedClient.type === 'xlsx' && !clientPdfBuf ? parsedClient.sheets.slice(0, 1) : null,
+      // Rich styled sheet data for the client-side XLSX renderer (looks like
+      // opening the workbook in Excel — col widths, merges, fills, fonts, borders).
+      argusSheets:  parsedArgus.type  === 'xlsx' ? parsedArgus.sheets.slice(0, 1)  : null,
+      clientSheets: parsedClient.type === 'xlsx' ? parsedClient.sheets.slice(0, 1) : null,
     }
     const excelBuf = await buildExcel(payload)
 

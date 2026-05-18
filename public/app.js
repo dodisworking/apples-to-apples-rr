@@ -669,41 +669,70 @@ async function renderReviewerSide(side, host, match, tenants) {
   }
 }
 
-// ─── XLSX → styled HTML table renderer ────────────────
-// Recreates the sheet's row layout closely enough to read like Excel.
-// Highlights the active tenant's row range with a red box overlay.
+// ─── XLSX → styled HTML table renderer (faithful to original Excel) ─
+// Uses cell-level styles extracted server-side (fills, fonts, alignment,
+// borders, column widths, merged cells, number formats). Looks like
+// opening the workbook in Excel.
 function renderXlsxSheet(host, sheet, match, side, tenants) {
   const rows = sheet.rows || []
   if (!rows.length) {
     host.innerHTML = '<div style="padding:20px;color:#9ca3af">(empty sheet)</div>'
     return
   }
+  const styled = sheet.styled || { colWidths: [], rowHeights: [], merges: [], cells: [] }
+  const styledCells = styled.cells || []
+  const merges = styled.merges || []
 
-  // Determine which rows belong to the matched tenant.
-  // For Argus: use _argusBlockRow as the start of the block (each block is ~5–6 rows).
-  // For Client: find the client tenant in the sheet rows by suite/name and span its block.
+  // Build a covered map for merged cells (suppresses rendering of cells inside a merge except the top-left)
+  const covered = new Set()
+  const mergeAt = new Map()    // "r,c" → { rowSpan, colSpan }
+  for (const m of merges) {
+    mergeAt.set(`${m.top},${m.left}`, { rowSpan: m.bottom - m.top + 1, colSpan: m.right - m.left + 1 })
+    for (let r = m.top; r <= m.bottom; r++) {
+      for (let c = m.left; c <= m.right; c++) {
+        if (r === m.top && c === m.left) continue
+        covered.add(`${r},${c}`)
+      }
+    }
+  }
+
+  // Identify the active tenant's row block
   const tenant = side === 'argus' ? match.argus : match.client
   const blockStart = side === 'argus' ? (tenant?._argusBlockRow ?? -1) : findClientBlockRow(rows, tenant)
-  const blockEnd = blockStart >= 0 ? blockStart + 5 : -1  // typical Argus tenant block is 5 rows
+  const blockEnd = blockStart >= 0 ? blockStart + 5 : -1
 
   const colCount = Math.max(...rows.map(r => r.length))
-  const headerEnd = side === 'argus' ? 11 : 0   // Argus rows 1-12 are header scaffolding
 
-  let html = '<div class="xlsx-sheet"><table class="xlsx-table"><tbody>'
+  // colgroup for column widths (Excel char-width → pixels approx)
+  let html = '<div class="xlsx-sheet"><table class="xlsx-table"><colgroup>'
+  html += '<col class="xlsx-col-rownum">'
+  for (let c = 0; c < colCount; c++) {
+    const w = styled.colWidths?.[c]
+    const px = w ? Math.round(w * 7.5) : 80          // Excel char ≈ 7.5px
+    html += `<col style="width:${px}px">`
+  }
+  html += '</colgroup><tbody>'
+
   rows.forEach((row, rIdx) => {
     const isInBlock = blockStart >= 0 && rIdx >= blockStart && rIdx <= blockEnd
-    const isHeader  = rIdx < headerEnd
     const rowClass = [
-      isHeader ? 'xlsx-header' : '',
       isInBlock ? 'xlsx-active-block' : '',
       rIdx === blockStart ? 'xlsx-block-start' : '',
       rIdx === blockEnd   ? 'xlsx-block-end'   : '',
     ].filter(Boolean).join(' ')
-    html += `<tr class="${rowClass}" data-row="${rIdx + 1}"><th class="xlsx-rownum">${rIdx + 1}</th>`
+    const rh = styled.rowHeights?.[rIdx]
+    const rowStyle = rh ? ` style="height:${Math.round(rh * 1.3)}px"` : ''
+    html += `<tr class="${rowClass}" data-row="${rIdx + 1}"${rowStyle}>`
+    html += `<th class="xlsx-rownum">${rIdx + 1}</th>`
     for (let c = 0; c < colCount; c++) {
-      const v = row[c]
-      const cellTxt = v == null || v === '' ? '' : (typeof v === 'number' ? fmtCell(v) : String(v))
-      html += `<td>${escape(cellTxt)}</td>`
+      if (covered.has(`${rIdx},${c}`)) continue
+      const merge = mergeAt.get(`${rIdx},${c}`)
+      const styleObj = styledCells[rIdx]?.[c] || {}
+      const raw = row[c]
+      const text = raw == null || raw === '' ? '' : (typeof raw === 'number' ? fmtCell(raw, styleObj.fmt) : String(raw))
+      const css = cellCss(styleObj)
+      const mergeAttr = merge ? ` rowspan="${merge.rowSpan}" colspan="${merge.colSpan}"` : ''
+      html += `<td${mergeAttr}${css ? ` style="${css}"` : ''}>${escape(text)}</td>`
     }
     html += '</tr>'
   })
@@ -712,13 +741,30 @@ function renderXlsxSheet(host, sheet, match, side, tenants) {
   host.innerHTML = html
   host.style.position = 'relative'
 
-  // Scroll the highlighted block into view
   if (blockStart >= 0) {
     const target = host.querySelector(`tr[data-row="${blockStart + 1}"]`)
-    if (target) {
-      setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'instant' }), 50)
-    }
+    if (target) setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'instant' }), 50)
   }
+}
+
+function cellCss(s) {
+  if (!s) return ''
+  const css = []
+  if (s.bg) css.push('background:' + s.bg)
+  if (s.f?.c) css.push('color:' + s.f.c)
+  if (s.f?.n) css.push('font-family:"' + s.f.n + '",sans-serif')
+  if (s.f?.s) css.push('font-size:' + (s.f.s) + 'pt')
+  if (s.f?.b) css.push('font-weight:700')
+  if (s.f?.i) css.push('font-style:italic')
+  if (s.a?.h) css.push('text-align:' + s.a.h)
+  if (s.a?.v) css.push('vertical-align:' + s.a.v)
+  if (s.brd) {
+    if (s.brd.t) css.push('border-top:1px solid #6b7280')
+    if (s.brd.b) css.push('border-bottom:1px solid #6b7280')
+    if (s.brd.l) css.push('border-left:1px solid #6b7280')
+    if (s.brd.r) css.push('border-right:1px solid #6b7280')
+  }
+  return css.join(';')
 }
 
 function findClientBlockRow(rows, tenant) {
@@ -733,7 +779,9 @@ function findClientBlockRow(rows, tenant) {
   return -1
 }
 
-function fmtCell(n) {
+function fmtCell(n, fmt) {
+  if (fmt === 'money') return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (fmt === 'pct')   return (n * 100).toFixed(2) + '%'
   if (Number.isInteger(n)) return n.toLocaleString()
   return Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
@@ -778,19 +826,6 @@ async function loadPdfDoc(side) {
   if (pdfCache.has(side)) return pdfCache.get(side)
   if (typeof window.pdfjsLib === 'undefined') return null
 
-  // Prefer server-converted PDF when available (XLSX → PDF via LibreOffice).
-  // This gives true Excel-rendered visual fidelity for the reviewer.
-  const convertedB64 = side === 'argus' ? state.result?.argusPdfBase64 : state.result?.clientPdfBase64
-  if (convertedB64) {
-    const bytes = b64ToBlob(convertedB64, 'application/pdf')
-    const buf = await bytes.arrayBuffer()
-    const pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise
-    const entry = { type: 'pdf', pdfDoc, index: new Map(), fromConverted: true }
-    pdfCache.set(side, entry)
-    return entry
-  }
-
-  // Otherwise fall back to the originally uploaded file
   const file = side === 'argus' ? state.argusFile : state.clientFile
   if (!file) return null
   const isPdf = /\.pdf$/i.test(file.name)
