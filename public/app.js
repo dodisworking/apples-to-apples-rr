@@ -776,11 +776,25 @@ $('#togglePreview').addEventListener('click', () => {
 
 async function loadPdfDoc(side) {
   if (pdfCache.has(side)) return pdfCache.get(side)
+  if (typeof window.pdfjsLib === 'undefined') return null
+
+  // Prefer server-converted PDF when available (XLSX → PDF via LibreOffice).
+  // This gives true Excel-rendered visual fidelity for the reviewer.
+  const convertedB64 = side === 'argus' ? state.result?.argusPdfBase64 : state.result?.clientPdfBase64
+  if (convertedB64) {
+    const bytes = b64ToBlob(convertedB64, 'application/pdf')
+    const buf = await bytes.arrayBuffer()
+    const pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise
+    const entry = { type: 'pdf', pdfDoc, index: new Map(), fromConverted: true }
+    pdfCache.set(side, entry)
+    return entry
+  }
+
+  // Otherwise fall back to the originally uploaded file
   const file = side === 'argus' ? state.argusFile : state.clientFile
   if (!file) return null
   const isPdf = /\.pdf$/i.test(file.name)
   if (!isPdf) { pdfCache.set(side, { type: 'xlsx', file }); return pdfCache.get(side) }
-  if (typeof window.pdfjsLib === 'undefined') return null
   const buf = await file.arrayBuffer()
   const pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise
   const entry = { type: 'pdf', pdfDoc, index: new Map() }

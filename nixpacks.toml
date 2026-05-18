@@ -1,0 +1,9 @@
+# Tell Railway's Nixpacks builder to include LibreOffice in the runtime image.
+# libreoffice-convert shells out to `soffice` to render XLSX → PDF on the fly,
+# so the reviewer can show the actual Excel sheet next to the client PDF.
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "libreoffice", "fontconfig", "freetype"]
+
+[start]
+cmd = "node server.js"
