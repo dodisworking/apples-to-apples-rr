@@ -267,7 +267,159 @@ function renderReview() {
   $('#notesBar').innerHTML = (r.notes || []).map(n => `<div class="note-item">${escape(n)}</div>`).join('')
 
   renderTable()
+  renderFindingsSidebar()
   wireToolbar()
+}
+
+// ═══ Flat findings queue (every finding across every tenant) ════
+//
+// Each entry: { matchIdx, fieldKey, label, severity, argusValue, clientValue,
+//               tenantLabel, isMissing, suiteKey, verdict }
+function buildFindingsList() {
+  const out = []
+  ;(state.result.matches || []).forEach((m, matchIdx) => {
+    const tenantLabel = `Suite ${m.suite || '—'} · ${m.argus?.name || m.client?.name || '(?)'}`
+    const suiteKey = m.suiteKey || m.suite
+    if (m.flags?.argusOnly) {
+      out.push({
+        matchIdx, fieldKey: 'tenant_presence',
+        label: 'Missing from client RR',
+        severity: 'HIGH', isMissing: true,
+        argusValue: m.argus?.name || '—', clientValue: '— (not found)',
+        tenantLabel, suiteKey,
+      })
+    } else if (m.flags?.clientOnly) {
+      out.push({
+        matchIdx, fieldKey: 'tenant_presence',
+        label: 'Missing from Argus RR',
+        severity: 'HIGH', isMissing: true,
+        argusValue: '— (not found)', clientValue: m.client?.name || '—',
+        tenantLabel, suiteKey,
+      })
+    } else {
+      for (const d of (m.diffs || [])) {
+        out.push({
+          matchIdx, fieldKey: d.field,
+          label: d.label || d.field,
+          severity: d.severity || 'LOW',
+          isMissing: false,
+          argusValue: d.argusValue, clientValue: d.clientValue,
+          tenantLabel, suiteKey,
+        })
+      }
+    }
+  })
+  return out
+}
+
+state.findingsFilter = 'all'
+state.findingsQuery = ''
+
+function getFindingsView() {
+  const all = buildFindingsList()
+  const reviews = state.reviews || {}
+  const verdictOf = (f) => {
+    const r = reviews[f.suiteKey]
+    if (!r || typeof r !== 'object') return null
+    if ('verdict' in r && !Object.values(r).some(v => v && typeof v === 'object' && 'verdict' in v)) return r.verdict
+    return r[f.fieldKey]?.verdict || null
+  }
+  const fv = state.findingsFilter
+  const q = (state.findingsQuery || '').toLowerCase()
+  return all
+    .map(f => ({ ...f, verdict: verdictOf(f) }))
+    .filter(f => {
+      if (fv === 'HIGH' || fv === 'MEDIUM' || fv === 'LOW') {
+        if (f.severity !== fv) return false
+      } else if (fv === 'missing') {
+        if (!f.isMissing) return false
+      } else if (fv === 'unreviewed') {
+        if (f.verdict) return false
+      }
+      if (q) {
+        const blob = (f.label + ' ' + f.tenantLabel + ' ' + f.argusValue + ' ' + f.clientValue).toLowerCase()
+        if (!blob.includes(q)) return false
+      }
+      return true
+    })
+}
+
+function renderFindingsSidebar() {
+  const list = getFindingsView()
+  const all = buildFindingsList()
+  const reviewed = all.filter(f => {
+    const r = state.reviews?.[f.suiteKey]
+    if (!r || typeof r !== 'object') return false
+    if ('verdict' in r && !Object.values(r).some(v => v && typeof v === 'object' && 'verdict' in v)) return !!r.verdict
+    return !!(r[f.fieldKey]?.verdict)
+  }).length
+
+  $('#findingsSidebarMeta').textContent =
+    `${list.length} of ${all.length} shown · ${reviewed}/${all.length} reviewed`
+
+  const html = list.map((f, i) => {
+    const v = f.verdict
+    const verdictBadge = v === 'good' ? '👍' : v === 'bad' ? '👎' : ''
+    const cls = [
+      'findings-row',
+      f.isMissing ? 'missing' : f.severity,
+      v ? 'verdict-' + v : '',
+      state.activeIdx === f.matchIdx && state.activeFieldKey === f.fieldKey ? 'selected' : '',
+    ].join(' ')
+    return `
+      <div class="${cls}" data-match="${f.matchIdx}" data-field="${escape(f.fieldKey)}">
+        <div class="fr-top">
+          <span class="fr-sev">${f.severity}</span>
+          <span class="fr-label">${escape(f.label)}</span>
+          <span class="fr-verdict">${verdictBadge}</span>
+        </div>
+        <div class="fr-tenant">${escape(f.tenantLabel)}</div>
+        <div class="fr-vals">${escape(f.argusValue)} → ${escape(f.clientValue)}</div>
+      </div>`
+  }).join('')
+
+  $('#findingsSidebarList').innerHTML = html || '<div style="padding:20px;color:#9ca3af;font-size:12px;text-align:center">(no findings match this filter)</div>'
+
+  // Filter chips
+  document.querySelectorAll('#findingsFilterChips .chip-sm').forEach(c => {
+    c.onclick = () => {
+      document.querySelectorAll('#findingsFilterChips .chip-sm').forEach(x => x.classList.remove('active'))
+      c.classList.add('active')
+      state.findingsFilter = c.dataset.fs
+      renderFindingsSidebar()
+    }
+  })
+  $('#findingsSearch').oninput = (e) => {
+    state.findingsQuery = e.target.value
+    renderFindingsSidebar()
+  }
+
+  // Click → open drawer at that tenant, expand that field
+  $('#findingsSidebarList').onclick = (e) => {
+    const row = e.target.closest('.findings-row[data-match]')
+    if (!row) return
+    const matchIdx = parseInt(row.dataset.match, 10)
+    const fieldKey = row.dataset.field
+    state.activeFieldKey = fieldKey
+    openDrawer(matchIdx)
+    // After openDrawer renders the body, expand the target finding card
+    requestAnimationFrame(() => {
+      const card = document.querySelector(`.finding-card[data-field="${cssEscape(fieldKey)}"]`)
+      if (card) {
+        card.classList.add('expanded')
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        const grid = document.getElementById('previewGrid')
+        if (grid?.hidden) {
+          grid.hidden = false
+          document.getElementById('togglePreview').textContent = '🫣 Hide sources'
+        }
+      }
+    })
+  }
+}
+
+function cssEscape(s) {
+  return String(s ?? '').replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c)
 }
 
 function renderTable() {
@@ -528,13 +680,25 @@ function closeDrawer() {
 }
 
 function nav(d) {
-  const list = state.result.matches
-  let idx = state.activeIdx
-  for (let k = 0; k < list.length; k++) {
-    idx = (idx + d + list.length) % list.length
-    if (!list[idx].flags?.clean) break
-  }
-  openDrawer(idx)
+  // Walk the FLAT findings list — prev/next jumps to the next finding, not the
+  // next tenant. This is what the paralegal asked for: sequential top-to-bottom
+  // review of every comment regardless of which tenant it belongs to.
+  const list = getFindingsView()
+  if (!list.length) return
+  let cur = list.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === state.activeFieldKey)
+  if (cur < 0) cur = list.findIndex(f => f.matchIdx === state.activeIdx)
+  if (cur < 0) cur = 0
+  const next = (cur + d + list.length) % list.length
+  const target = list[next]
+  state.activeFieldKey = target.fieldKey
+  openDrawer(target.matchIdx)
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`.finding-card[data-field="${cssEscape(target.fieldKey)}"]`)
+    if (card) {
+      card.classList.add('expanded')
+      card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  })
 }
 
 function setVerdict(v) {
@@ -552,6 +716,8 @@ function setVerdict(v) {
 // future runs on the same property auto-apply the call.
 let _persistTimer = null
 function persistLearnings() {
+  // Re-render the sidebar immediately so verdict badges update in real time
+  if (document.getElementById('findingsSidebarList')) renderFindingsSidebar()
   clearTimeout(_persistTimer)
   _persistTimer = setTimeout(async () => {
     try {
@@ -563,7 +729,6 @@ function persistLearnings() {
       })
       const data = await resp.json().catch(() => null)
       if (data?.stats) {
-        // Flash a tiny indicator in the footer
         const h = $('#health')
         if (h) {
           const old = h.textContent

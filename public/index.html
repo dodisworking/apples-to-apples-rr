@@ -224,10 +224,29 @@
       <!-- Notes -->
       <div class="notes-bar" id="notesBar"></div>
 
-      <!-- Side-by-side table -->
-      <div class="sbs-wrap">
-        <div class="sbs-table" id="sbsTable">
-          <!-- populated by JS -->
+      <!-- Findings queue + side-by-side table -->
+      <div class="review-layout">
+        <aside class="findings-sidebar" id="findingsSidebar">
+          <div class="findings-sidebar-head">
+            <div class="findings-sidebar-title">📋 All Findings</div>
+            <div class="findings-sidebar-meta" id="findingsSidebarMeta">— pending</div>
+            <input type="text" class="findings-search" id="findingsSearch" placeholder="Filter findings…">
+            <div class="findings-filter-chips" id="findingsFilterChips">
+              <button class="chip-sm active" data-fs="all">All</button>
+              <button class="chip-sm" data-fs="HIGH">HIGH</button>
+              <button class="chip-sm" data-fs="MEDIUM">MED</button>
+              <button class="chip-sm" data-fs="LOW">LOW</button>
+              <button class="chip-sm" data-fs="missing">Missing</button>
+              <button class="chip-sm" data-fs="unreviewed">Unreviewed</button>
+            </div>
+          </div>
+          <div class="findings-sidebar-list" id="findingsSidebarList"></div>
+        </aside>
+
+        <div class="sbs-wrap">
+          <div class="sbs-table" id="sbsTable">
+            <!-- populated by JS -->
+          </div>
         </div>
       </div>
     </section>
