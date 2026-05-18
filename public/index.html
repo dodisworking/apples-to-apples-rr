@@ -206,15 +206,18 @@
           <button class="chip" data-filter="clientOnly">Client only</button>
           <button class="chip" data-filter="clean">Clean matches</button>
         </div>
-        <div class="view-toggle">
-          <label class="view-opt active">
-            <input type="radio" name="view" value="as-argus" checked>
-            <span>🍎 ↔ 🍎 Client as Argus</span>
-          </label>
-          <label class="view-opt">
-            <input type="radio" name="view" value="original">
-            <span>🍎 ↔ 🍐 Client as Original</span>
-          </label>
+        <div class="toolbar-right">
+          <button id="openPdfReviewer" class="btn ghost">🔍 Open PDF cross-reference</button>
+          <div class="view-toggle">
+            <label class="view-opt active">
+              <input type="radio" name="view" value="as-argus" checked>
+              <span>🍎 ↔ 🍎 Client as Argus</span>
+            </label>
+            <label class="view-opt">
+              <input type="radio" name="view" value="original">
+              <span>🍎 ↔ 🍐 Client as Original</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -228,6 +231,35 @@
         </div>
       </div>
     </section>
+
+    <!-- ─── FULL-SCREEN PDF CROSS-REFERENCE REVIEWER ─────── -->
+    <div class="pdf-reviewer" id="pdfReviewer" aria-hidden="true">
+      <div class="pdf-reviewer-head">
+        <div class="pdf-reviewer-title">
+          <span>📄 PDF Cross-Reference</span>
+          <select id="pdfMatchSelector" class="pdf-match-select" aria-label="Jump to discrepancy"></select>
+        </div>
+        <div class="pdf-reviewer-nav">
+          <button id="pdfPrev" class="btn ghost btn-sm">← Prev</button>
+          <span id="pdfPosition" class="pdf-pos">— / —</span>
+          <button id="pdfNext" class="btn ghost btn-sm">Next →</button>
+          <button id="pdfReviewerClose" class="btn ghost btn-sm">✕ Close</button>
+        </div>
+      </div>
+      <div class="pdf-reviewer-body">
+        <div class="pdf-reviewer-side pdf-reviewer-apple">
+          <div class="pdf-reviewer-side-label">🍎 APPLE · ARGUS</div>
+          <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
+        </div>
+        <div class="pdf-reviewer-side pdf-reviewer-pear">
+          <div class="pdf-reviewer-side-label">🍐 PEAR · CLIENT</div>
+          <div class="pdf-reviewer-canvas" id="pdfRevClient"></div>
+        </div>
+      </div>
+      <div class="pdf-reviewer-foot" id="pdfReviewerFoot">
+        <!-- diff details inserted by JS -->
+      </div>
+    </div>
 
     <!-- ─── Drawer ────────────────────────────────────────── -->
     <div class="drawer" id="drawer" aria-hidden="true">

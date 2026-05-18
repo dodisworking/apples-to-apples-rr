@@ -485,6 +485,155 @@ function renderDrawerBody(m) {
     </div>`
 }
 
+// ═══ Full-screen PDF Cross-Reference Reviewer ════════
+$('#openPdfReviewer').addEventListener('click', () => openPdfReviewer(0))
+$('#pdfReviewerClose').addEventListener('click', () => $('#pdfReviewer').setAttribute('aria-hidden', 'true'))
+$('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
+$('#pdfNext').addEventListener('click', () => stepReviewer(+1))
+$('#pdfMatchSelector').addEventListener('change', (e) => openPdfReviewer(parseInt(e.target.value, 10)))
+
+document.addEventListener('keydown', (e) => {
+  if ($('#pdfReviewer').getAttribute('aria-hidden') !== 'false') return
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  if (e.key === 'Escape') $('#pdfReviewer').setAttribute('aria-hidden', 'true')
+  else if (e.key === 'j' || e.key === 'ArrowDown' || e.key === 'ArrowRight') stepReviewer(+1)
+  else if (e.key === 'k' || e.key === 'ArrowUp'   || e.key === 'ArrowLeft')  stepReviewer(-1)
+})
+
+function stepReviewer(delta) {
+  const list = reviewerList()
+  if (!list.length) return
+  let cur = list.findIndex(i => i === state.activeIdx)
+  if (cur < 0) cur = 0
+  const next = (cur + delta + list.length) % list.length
+  openPdfReviewer(list[next])
+}
+
+// Which matches show up in the reviewer's selector. Defaults to all non-clean rows.
+function reviewerList() {
+  return (state.result.matches || [])
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => !m.flags?.clean)   // skip clean matches — nothing to review
+    .map(({ i }) => i)
+}
+
+async function openPdfReviewer(idx) {
+  const list = reviewerList()
+  if (!list.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
+  if (!list.includes(idx)) idx = list[0]
+  state.activeIdx = idx
+  const pos = list.indexOf(idx) + 1
+  $('#pdfPosition').textContent = `${pos} / ${list.length}`
+
+  // Populate selector
+  const sel = $('#pdfMatchSelector')
+  sel.innerHTML = list.map(i => {
+    const m = state.result.matches[i]
+    const label = `Suite ${m.suite} — ${m.argus?.name || m.client?.name || '(?)'} · ${matchSummary(m)}`
+    return `<option value="${i}" ${i === idx ? 'selected' : ''}>${escape(label)}</option>`
+  }).join('')
+
+  // Foot: list of diffs
+  const m = state.result.matches[idx]
+  $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+
+  $('#pdfReviewer').setAttribute('aria-hidden', 'false')
+
+  // Render both sides
+  await Promise.all([
+    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants),
+    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants),
+  ])
+}
+
+function matchSummary(m) {
+  if (m.flags?.argusOnly) return 'ARGUS ONLY'
+  if (m.flags?.clientOnly) return 'CLIENT ONLY'
+  if (m.flags?.clean) return 'MATCH'
+  const high = m.diffs.filter(d => d.severity === 'HIGH').length
+  return high ? `${high} HIGH · ${m.diffs.length} diff(s)` : `${m.diffs.length} diff(s)`
+}
+
+function renderReviewerFoot(m) {
+  if (m.flags?.clean) return `<div class="empty-foot">✓ Every field matches on this tenant.</div>`
+  if (m.flags?.argusOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.argus?.name)}</b> appears in Argus but no match was found in the client RR.</div>`
+  if (m.flags?.clientOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.client?.name)}</b> appears in the client RR but no match was found in Argus.</div>`
+  return `<ul class="diff-list">${(m.diffs || []).map(d => `
+    <li class="sev-${d.severity}">
+      <span class="diff-sev">${d.severity}</span>
+      <div class="diff-label">${escape(d.label)}</div>
+      <div class="diff-values"><b>🍎 Argus:</b> ${escape(d.argusValue)} · <b>🍐 Client:</b> ${escape(d.clientValue)}</div>
+      ${d.rule ? `<div class="diff-rule">${escape(d.rule)}</div>` : ''}
+    </li>`).join('')}</ul>`
+}
+
+async function renderReviewerSide(side, host, match, tenants) {
+  host.innerHTML = '<div style="padding:20px;color:#9ca3af">Loading…</div>'
+  const tenant = side === 'argus' ? match.argus : match.client
+  if (!tenant) {
+    host.innerHTML = `<div style="padding:20px;color:#9ca3af">Tenant not present on this side.</div>`
+    return
+  }
+  let entry
+  try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
+
+  if (entry?.type === 'pdf') {
+    await buildIndex(entry, tenants || [])
+    const loc = entry.index.get(match.suiteKey || match.suite)
+    if (!loc) {
+      host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate Suite ${escape(match.suite || '')} in this PDF.</div>`
+      return
+    }
+    const page = await entry.pdfDoc.getPage(loc.page)
+    const scale = 1.7
+    const vp = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width = vp.width; canvas.height = vp.height
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+    host.innerHTML = ''
+    host.style.position = 'relative'
+    host.appendChild(canvas)
+    const rect = document.createElement('div')
+    rect.className = 'hl-rect'
+    rect.style.left = (canvas.offsetLeft + loc.rect.x * scale) + 'px'
+    rect.style.top  = (canvas.offsetTop  + loc.rect.y * scale) + 'px'
+    rect.style.width  = (loc.rect.w * scale) + 'px'
+    rect.style.height = (loc.rect.h * scale) + 'px'
+    host.appendChild(rect)
+    host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 80)
+  } else {
+    // XLSX side → render an Argus-style card with the flagged fields outlined
+    host.innerHTML = renderArgusCard(side, tenant, match)
+  }
+}
+
+function renderArgusCard(side, t, m) {
+  const flagged = new Set((m.diffs || []).map(d => d.field))
+  const psf = bestPsf(t)
+  const annual = t.baseRent?.annualTotal ?? (psf != null && t.sqft ? psf * t.sqft : null)
+  const monthly = t.baseRent?.monthlyTotal ?? (annual != null ? annual / 12 : null)
+  const row = (k, v, key) => `
+    <div class="arow ${flagged.has(key) ? 'flagged' : ''}">
+      <div class="k">${escape(k)}</div>
+      <div class="v">${escape(v ?? '—')}</div>
+    </div>`
+  return `
+    <div class="argus-card">
+      <h3>${side === 'argus' ? '🍎' : '🍐'} ${escape(t.name || '—')}</h3>
+      ${row('Suite', t.suite, 'suite')}
+      ${row('SF', t.sqft != null ? Number(t.sqft).toLocaleString() : null, 'sqft')}
+      ${row('Lease Start', t.leaseStart, 'lease_start')}
+      ${row('Lease End', t.leaseEnd, 'lease_end')}
+      ${row('$/SF/yr', psf != null ? '$' + psf.toFixed(2) : null, 'base_rent_psf')}
+      ${row('Annual Rent', annual != null ? '$' + annual.toLocaleString(undefined, { maximumFractionDigits: 0 }) : null, 'base_rent_annual')}
+      ${row('$/SF/mo', psf != null ? '$' + (psf / 12).toFixed(2) : null, 'base_rent_psf')}
+      ${row('Monthly Rent', monthly != null ? '$' + monthly.toLocaleString(undefined, { maximumFractionDigits: 0 }) : null, 'base_rent_annual')}
+      ${row('Rent Steps', (t.rentSteps || []).length + ' step(s): ' + fmtStepsShort(t.rentSteps).replace(/\n/g, '  ·  '), 'rent_steps_count')}
+      ${row('Free Rent', fmtFreeRent(t.freeRent), 'free_rent')}
+      ${row('% Rent', fmtPctRent(t.percentRent), 'pct_rent_breakpoint')}
+    </div>`
+}
+
 // ═══ Source preview (PDF render + red rectangle) ═════
 const pdfCache = new Map()
 

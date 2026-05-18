@@ -244,6 +244,7 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+.toolbar-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip {
   border: 1px solid #e5e7eb; background: #fff; border-radius: 999px;
@@ -368,6 +369,101 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .status-pill.diffs  { background: #fee2e2; color: #991b1b; }
 .status-pill.argusOnly  { background: #fed7aa; color: #9a3412; }
 .status-pill.clientOnly { background: #fed7aa; color: #9a3412; }
+
+/* ═══════════════════════════════════════════════════════
+   FULL-SCREEN PDF CROSS-REFERENCE REVIEWER
+   ═══════════════════════════════════════════════════════ */
+.pdf-reviewer {
+  position: fixed; inset: 0; z-index: 90;
+  background: #fafafa;
+  display: none;
+  flex-direction: column;
+}
+.pdf-reviewer[aria-hidden="false"] { display: flex; }
+.pdf-reviewer-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px; border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+.pdf-reviewer-title {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 16px; font-weight: 700; color: #111827;
+}
+.pdf-match-select {
+  font: inherit; font-size: 13px;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px;
+  background: #fff; color: #111827;
+  max-width: 480px;
+}
+.pdf-reviewer-nav { display: flex; gap: 8px; align-items: center; }
+.pdf-pos { font-size: 12px; color: #6b7280; min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; }
+.pdf-reviewer-body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 8px;
+}
+.pdf-reviewer-side {
+  background: #fff; border: 2px solid #e5e7eb; border-radius: 10px;
+  display: flex; flex-direction: column; overflow: hidden;
+  min-height: 0;
+}
+.pdf-reviewer-apple { border-color: #fecaca; }
+.pdf-reviewer-pear  { border-color: #bbf7d0; }
+.pdf-reviewer-side-label {
+  padding: 8px 12px;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  background: #fef2f2; color: #991b1b;
+  border-bottom: 1px solid #f3f4f6;
+}
+.pdf-reviewer-pear .pdf-reviewer-side-label { background: #f0fdf4; color: #065f46; }
+.pdf-reviewer-canvas {
+  flex: 1; overflow: auto; padding: 12px;
+  position: relative;
+  display: flex; justify-content: center;
+  background: #f9fafb;
+}
+.pdf-reviewer-canvas canvas { display: block; max-width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.pdf-reviewer-canvas .hl-rect {
+  position: absolute;
+  border: 3px solid #dc2626;
+  background: rgba(220, 38, 38, .22);
+  border-radius: 3px;
+  pointer-events: none;
+  animation: hl-pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, .12);
+}
+.pdf-reviewer-canvas .argus-card {
+  background: #fff; border: 1px solid #fecaca; border-radius: 12px;
+  padding: 16px 20px; max-width: 520px; width: 100%;
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  font-size: 13px;
+}
+.pdf-reviewer-canvas .argus-card h3 {
+  margin: 0 0 12px; font-size: 16px; color: #111827;
+  padding-bottom: 8px; border-bottom: 2px solid #fecaca;
+}
+.pdf-reviewer-canvas .argus-card .arow {
+  display: grid; grid-template-columns: 130px 1fr;
+  padding: 5px 0; border-bottom: 1px solid #f3f4f6;
+}
+.pdf-reviewer-canvas .argus-card .arow:last-child { border-bottom: 0; }
+.pdf-reviewer-canvas .argus-card .arow .k { color: #6b7280; font-size: 11px; }
+.pdf-reviewer-canvas .argus-card .arow .v { color: #111827; }
+.pdf-reviewer-canvas .argus-card .arow.flagged .v {
+  background: #fee2e2; padding: 2px 8px; border-radius: 4px; font-weight: 700;
+  outline: 2px solid #dc2626; outline-offset: -1px;
+  animation: hl-pulse 1.6s ease-in-out infinite;
+}
+.pdf-reviewer-foot {
+  background: #fff; border-top: 1px solid #e5e7eb;
+  padding: 12px 20px;
+  max-height: 30vh; overflow-y: auto;
+}
+.pdf-reviewer-foot .diff-list { margin: 0; }
+.pdf-reviewer-foot .empty-foot {
+  font-size: 13px; color: #16a34a;
+  text-align: center; padding: 8px;
+}
 
 /* ─── Drawer ──────────────────────────────────────────── */
 .drawer { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
