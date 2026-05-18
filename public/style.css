@@ -122,6 +122,7 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   0% { transform: scale(.7); } 60% { transform: scale(1.15); } 100% { transform: scale(1); }
 }
 .drop-label { font-size: 18px; font-weight: 700; color: #111827; }
+.drop-label .alias { color: #6b7280; font-weight: 500; font-size: 13px; }
 .drop-hint { font-size: 12px; color: #9ca3af; margin-top: 4px; }
 .drop-filename {
   margin-top: 10px; font-size: 13px; color: #047857;
