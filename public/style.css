@@ -505,6 +505,15 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .diff-list li .diff-values { color: #4b5563; margin-top: 2px; }
 .diff-list li .diff-rule   { color: #6b7280; font-size: 11px; margin-top: 4px; font-style: italic; }
 .diff-list li .diff-sev    { float: right; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.diff-list li.suppressed   { opacity: .6; }
+.diff-list li.confirmed    { border-left-color: #16a34a; background: #f0fdf4; }
+.diff-list .badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  margin-left: 6px; vertical-align: middle;
+}
+.diff-list .badge.muted { background: #f3f4f6; color: #6b7280; }
+.diff-list .badge.good  { background: #d1fae5; color: #065f46; }
 
 .evidence-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;

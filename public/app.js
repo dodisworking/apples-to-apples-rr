@@ -256,6 +256,9 @@ function renderReview() {
     { n: s.clientOnly|| 0, l: 'Client only', cls: (s.clientOnly|| 0) ? 'orange' : '' },
     { n: s.highSeverityCount || 0, l: 'HIGH findings', cls: (s.highSeverityCount || 0) ? 'red' : '' },
   ]
+  if (s.learningsApplied) {
+    stats.push({ n: s.learningsApplied, l: '🧠 Learnings applied', cls: 'green' })
+  }
   $('#reviewStats').innerHTML = stats.map(x =>
     `<div class="stat-pill ${x.cls || ''}"><div class="n">${x.n}</div><div class="l">${x.l}</div></div>`
   ).join('')
@@ -395,6 +398,7 @@ $('#reviewNote').addEventListener('input', (e) => {
   const r = state.reviews[key] || { verdict: null, note: '' }
   r.note = e.target.value
   state.reviews[key] = r
+  persistLearnings()
 })
 document.addEventListener('keydown', (e) => {
   if ($('#drawer').getAttribute('aria-hidden') !== 'false') return
@@ -451,6 +455,34 @@ function setVerdict(v) {
   r.verdict = v
   state.reviews[key] = r
   document.querySelectorAll('.btn-review').forEach(b => b.classList.toggle('active', b.dataset.verdict === v))
+  persistLearnings()
+}
+
+// Debounced persistence — every time a review changes, save to the server so
+// future runs on the same property auto-apply the call.
+let _persistTimer = null
+function persistLearnings() {
+  clearTimeout(_persistTimer)
+  _persistTimer = setTimeout(async () => {
+    try {
+      const property = state.result?.property
+      if (!property) return
+      const resp = await fetch('/api/learn', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property, matches: state.result.matches, reviews: state.reviews }),
+      })
+      const data = await resp.json().catch(() => null)
+      if (data?.stats) {
+        // Flash a tiny indicator in the footer
+        const h = $('#health')
+        if (h) {
+          const old = h.textContent
+          h.textContent = `🧠 ${data.stats.total} learning(s) saved`
+          setTimeout(() => { h.textContent = old }, 1800)
+        }
+      }
+    } catch (e) { /* silent */ }
+  }, 600)
 }
 
 function renderDrawerBody(m) {
@@ -465,11 +497,13 @@ function renderDrawerBody(m) {
   const diffList = diffs.length ? `
     <ul class="diff-list">
       ${diffs.map(d => `
-        <li class="sev-${d.severity || 'LOW'}">
+        <li class="sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''}">
           <span class="diff-sev">${d.severity || 'LOW'}</span>
-          <div class="diff-label">${escape(d.label || d.field)}</div>
+          <div class="diff-label">${escape(d.label || d.field)} ${d.suppressed ? '<span class="badge muted">muted by learning</span>' : ''} ${d.confirmed ? '<span class="badge good">confirmed by learning</span>' : ''}</div>
           <div class="diff-values">Argus: <b>${escape(d.argusValue)}</b> · Client: <b>${escape(d.clientValue)}</b></div>
           ${d.rule ? `<div class="diff-rule">${escape(d.rule)}</div>` : ''}
+          ${d.suppressedReason ? `<div class="diff-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
+          ${d.confirmedNote    ? `<div class="diff-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
         </li>`).join('')}
     </ul>` : '<div style="color:#6b7280;font-size:13px;margin-bottom:14px">No field-level diffs — clean match.</div>'
 

@@ -8,6 +8,7 @@ import { parseArgusFromSheets } from './lib/argus.js'
 import { normalizeClient } from './lib/client.js'
 import { reconcile } from './lib/reconcile.js'
 import { buildExcel } from './lib/excel.js'
+import { loadAll as loadLearnings, recordBulk, forProperty, stats as learningStats } from './lib/learnings.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = path.dirname(__filename)
@@ -19,7 +20,31 @@ const HOST = process.env.HOST?.trim() || '0.0.0.0'
 app.use(express.json({ limit: '200mb' }))
 app.use(express.static(path.join(__dirname, 'public')))
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'apples-to-apples-rr' }))
+app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'apples-to-apples-rr', learnings: learningStats() }))
+
+/** GET /api/learnings?property=... → all learnings for a property */
+app.get('/api/learnings', (req, res) => {
+  const property = req.query.property
+  if (property) return res.json({ learnings: forProperty(property) })
+  res.json({ stats: learningStats(), learnings: loadLearnings() })
+})
+
+/**
+ * POST /api/learn
+ * Body: { property, matches: [...], reviews: { [suiteKey]: { verdict, note } } }
+ * Persists the paralegal's 👍/👎/notes so future runs for the same property
+ * suppress repeated false-positives and confirm repeated real findings.
+ */
+app.post('/api/learn', (req, res) => {
+  try {
+    const { property, matches, reviews } = req.body || {}
+    const n = recordBulk({ property, matches, reviews })
+    res.json({ ok: true, recorded: n, stats: learningStats() })
+  } catch (e) {
+    console.error('[learn]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
 
 /**
  * POST /api/detect
@@ -110,8 +135,11 @@ app.post('/api/compare', async (req, res) => {
     emit('progress', { stage: 'check-pctrent',  pct: 90, msg: '% rent (Argus col 10) — breakpoint + overage %…' })
     await tick()
 
-    // ── Run reconciliation (one shot, fast) ──────────────
-    const result = reconcile({ argus: argusParsed, client: clientNormalized })
+    // ── Run reconciliation (one shot, fast) — with learnings ──
+    const propertyName = argusParsed.property || clientNormalized.property
+    const learnings = propertyName ? forProperty(propertyName) : []
+    if (learnings.length) console.log(`[compare] applying ${learnings.length} prior learning(s) for ${propertyName}`)
+    const result = reconcile({ argus: argusParsed, client: clientNormalized, learnings })
 
     emit('progress', { stage: 'rendering', pct: 95, msg: 'Plating up Excel report…' })
     const payload = {

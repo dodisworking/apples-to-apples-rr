@@ -1,2 +1,5 @@
 [deploy]
 startCommand = "npm start"
+
+# Mount a Railway Volume here so learnings.json survives restarts/redeploys.
+# Set PERSIST_DIR=/data in the service's Variables tab and attach a Volume at /data.
