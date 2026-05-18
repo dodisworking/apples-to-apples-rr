@@ -150,6 +150,12 @@ app.post('/api/compare', async (req, res) => {
       matches: result.matches,
       argusTenants: argusParsed.tenants,
       clientTenants: clientNormalized.tenants,
+      // Ship raw sheets when source is XLSX so the client can render the actual sheet
+      // layout (not just a card of parsed fields) in the PDF cross-reference view.
+      argusSheets:  parsedArgus.type  === 'xlsx' ? parsedArgus.sheets.slice(0, 1)  : null,
+      clientSheets: parsedClient.type === 'xlsx' ? parsedClient.sheets.slice(0, 1) : null,
+      argusFileType:  parsedArgus.type,
+      clientFileType: parsedClient.type,
     }
     const excelBuf = await buildExcel(payload)
 

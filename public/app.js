@@ -659,9 +659,83 @@ async function renderReviewerSide(side, host, match, tenants) {
     host.appendChild(rect)
     host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 80)
   } else {
-    // XLSX side → render an Argus-style card with the flagged fields outlined
-    host.innerHTML = renderArgusCard(side, tenant, match)
+    // XLSX side → render the actual sheet as a styled table with the tenant rows highlighted
+    const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
+    if (sheets?.length) {
+      renderXlsxSheet(host, sheets[0], match, side, tenants || [])
+    } else {
+      host.innerHTML = renderArgusCard(side, tenant, match)
+    }
   }
+}
+
+// ─── XLSX → styled HTML table renderer ────────────────
+// Recreates the sheet's row layout closely enough to read like Excel.
+// Highlights the active tenant's row range with a red box overlay.
+function renderXlsxSheet(host, sheet, match, side, tenants) {
+  const rows = sheet.rows || []
+  if (!rows.length) {
+    host.innerHTML = '<div style="padding:20px;color:#9ca3af">(empty sheet)</div>'
+    return
+  }
+
+  // Determine which rows belong to the matched tenant.
+  // For Argus: use _argusBlockRow as the start of the block (each block is ~5–6 rows).
+  // For Client: find the client tenant in the sheet rows by suite/name and span its block.
+  const tenant = side === 'argus' ? match.argus : match.client
+  const blockStart = side === 'argus' ? (tenant?._argusBlockRow ?? -1) : findClientBlockRow(rows, tenant)
+  const blockEnd = blockStart >= 0 ? blockStart + 5 : -1  // typical Argus tenant block is 5 rows
+
+  const colCount = Math.max(...rows.map(r => r.length))
+  const headerEnd = side === 'argus' ? 11 : 0   // Argus rows 1-12 are header scaffolding
+
+  let html = '<div class="xlsx-sheet"><table class="xlsx-table"><tbody>'
+  rows.forEach((row, rIdx) => {
+    const isInBlock = blockStart >= 0 && rIdx >= blockStart && rIdx <= blockEnd
+    const isHeader  = rIdx < headerEnd
+    const rowClass = [
+      isHeader ? 'xlsx-header' : '',
+      isInBlock ? 'xlsx-active-block' : '',
+      rIdx === blockStart ? 'xlsx-block-start' : '',
+      rIdx === blockEnd   ? 'xlsx-block-end'   : '',
+    ].filter(Boolean).join(' ')
+    html += `<tr class="${rowClass}" data-row="${rIdx + 1}"><th class="xlsx-rownum">${rIdx + 1}</th>`
+    for (let c = 0; c < colCount; c++) {
+      const v = row[c]
+      const cellTxt = v == null || v === '' ? '' : (typeof v === 'number' ? fmtCell(v) : String(v))
+      html += `<td>${escape(cellTxt)}</td>`
+    }
+    html += '</tr>'
+  })
+  html += '</tbody></table></div>'
+
+  host.innerHTML = html
+  host.style.position = 'relative'
+
+  // Scroll the highlighted block into view
+  if (blockStart >= 0) {
+    const target = host.querySelector(`tr[data-row="${blockStart + 1}"]`)
+    if (target) {
+      setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'instant' }), 50)
+    }
+  }
+}
+
+function findClientBlockRow(rows, tenant) {
+  if (!tenant?.suite && !tenant?.name) return -1
+  const suiteStr = (tenant.suite || '').toString().replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const nameTok = tenant.name ? tenant.name.split(/[\s,]/).find(w => w.length > 3)?.toLowerCase() : null
+  for (let i = 0; i < rows.length; i++) {
+    const joined = rows[i].map(c => String(c ?? '')).join(' ').toLowerCase()
+    if (suiteStr && new RegExp(`(^|[^a-z0-9])${suiteStr}([^a-z0-9]|$)`).test(joined.replace(/[^a-z0-9 ]/gi, ''))) return i
+    if (nameTok && joined.includes(nameTok)) return i
+  }
+  return -1
+}
+
+function fmtCell(n) {
+  if (Number.isInteger(n)) return n.toLocaleString()
+  return Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 })
 }
 
 function renderArgusCard(side, t, m) {
