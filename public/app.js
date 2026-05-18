@@ -403,32 +403,63 @@ $('#reviewNote').addEventListener('input', (e) => {
   persistLearnings()
 })
 
-// Delegated handlers for per-finding accept/reject + note (Google Docs comments style)
+// Delegated handlers for finding cards (Google Docs comments style):
+//  - clicking the header expands/collapses
+//  - clicking 'Show in source' auto-opens the source preview pane below and scrolls there
+//  - clicking accept/reject/clear records the verdict per-field
 document.getElementById('drawerBody')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.finding-btn')
-  if (!btn) return
-  const card = btn.closest('.finding-card')
+  const card = e.target.closest('.finding-card')
   if (!card) return
-  const field = card.dataset.field
-  if (state.activeIdx < 0) return
-  const m = state.result.matches[state.activeIdx]
-  const key = m.suiteKey || m.suite
-  state.reviews[key] = state.reviews[key] || {}
-  // Migrate legacy tenant-level review shape if needed
-  if ('verdict' in state.reviews[key]) {
-    const legacy = state.reviews[key]
-    state.reviews[key] = { _tenantNote: legacy.note || '', __legacyVerdict: legacy.verdict }
+
+  // 'Show in source' button
+  if (e.target.closest('[data-jump]')) {
+    e.stopPropagation()
+    const grid = document.getElementById('previewGrid')
+    if (grid?.hidden) {
+      grid.hidden = false
+      document.getElementById('togglePreview').textContent = '🫣 Hide sources'
+    }
+    document.getElementById('drawerPreview')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    return
   }
-  const verdict = btn.dataset.verdict === 'none' ? null : btn.dataset.verdict
-  state.reviews[key][field] = state.reviews[key][field] || { verdict: null, note: '' }
-  state.reviews[key][field].verdict = verdict
-  // Reflect in UI
-  card.querySelectorAll('.finding-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.verdict === verdict)
-  })
-  card.classList.remove('verdict-good', 'verdict-bad')
-  if (verdict) card.classList.add('verdict-' + verdict)
-  persistLearnings()
+
+  // Verdict buttons
+  const btn = e.target.closest('.finding-btn')
+  if (btn) {
+    e.stopPropagation()
+    const field = card.dataset.field
+    if (state.activeIdx < 0) return
+    const m = state.result.matches[state.activeIdx]
+    const key = m.suiteKey || m.suite
+    state.reviews[key] = state.reviews[key] || {}
+    if ('verdict' in state.reviews[key]) {
+      const legacy = state.reviews[key]
+      state.reviews[key] = { _tenantNote: legacy.note || '', __legacyVerdict: legacy.verdict }
+    }
+    const verdict = btn.dataset.verdict === 'none' ? null : btn.dataset.verdict
+    state.reviews[key][field] = state.reviews[key][field] || { verdict: null, note: '' }
+    state.reviews[key][field].verdict = verdict
+    card.querySelectorAll('.finding-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.verdict === verdict)
+    })
+    card.classList.remove('verdict-good', 'verdict-bad')
+    if (verdict) card.classList.add('verdict-' + verdict)
+    persistLearnings()
+    return
+  }
+
+  // Header / value rows toggle expand
+  if (e.target.closest('[data-toggle]')) {
+    card.classList.toggle('expanded')
+    // When opening a finding card, auto-show sources too
+    if (card.classList.contains('expanded')) {
+      const grid = document.getElementById('previewGrid')
+      if (grid?.hidden) {
+        grid.hidden = false
+        document.getElementById('togglePreview').textContent = '🫣 Hide sources'
+      }
+    }
+  }
 })
 
 document.getElementById('drawerBody')?.addEventListener('input', (e) => {
@@ -555,8 +586,9 @@ function renderDrawerBody(m) {
     m.flags?.argusOnly  ? '<div class="note-item">This tenant is in Argus but <b>not found</b> in the client RR.</div>' :
     m.flags?.clientOnly ? '<div class="note-item">This tenant is in the client RR but <b>not found</b> in Argus.</div>' : ''
 
-  // Each finding gets a Google-Docs-style comment card with its OWN accept/reject + note.
-  // verdict per-finding is keyed by reviews[field] inside the per-tenant reviews map.
+  // Each finding gets a Google-Docs-style comment card. Collapsed by default —
+  // click the header to expand: shows the full paragraph explanation, auto-opens
+  // the source previews, and scrolls into view.
   const diffList = diffs.length ? `
     <div class="findings-list">
       ${diffs.map((d, fi) => {
@@ -566,25 +598,32 @@ function renderDrawerBody(m) {
         return `
         <div class="finding-card sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''} ${v ? 'verdict-' + v : ''}"
              data-field="${escape(fkey)}">
-          <div class="finding-head">
+          <div class="finding-head" data-toggle="1">
             <span class="finding-sev">${d.severity || 'LOW'}</span>
             <span class="finding-label">${escape(d.label || d.field)}</span>
-            ${d.suppressed ? '<span class="badge muted">muted by learning</span>' : ''}
-            ${d.confirmed ? '<span class="badge good">confirmed by learning</span>' : ''}
+            ${d.suppressed ? '<span class="badge muted">muted</span>' : ''}
+            ${d.confirmed ? '<span class="badge good">confirmed</span>' : ''}
+            ${v === 'good' ? '<span class="badge good">\u{1F44D}</span>' : ''}
+            ${v === 'bad'  ? '<span class="badge muted">\u{1F44E}</span>' : ''}
+            <span class="finding-toggle">▾</span>
           </div>
-          <div class="finding-vals">
+          <div class="finding-vals" data-toggle="1">
             <div class="fv apple">🍎 <b>${escape(d.argusValue)}</b></div>
             <div class="fv pear">🍐 <b>${escape(d.clientValue)}</b></div>
           </div>
-          ${d.rule ? `<div class="finding-rule">${escape(d.rule)}</div>` : ''}
-          ${d.suppressedReason ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
-          ${d.confirmedNote    ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
-          <div class="finding-actions">
-            <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good"    title="Confirm real discrepancy">👍 Confirm</button>
-            <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"     title="Reject as false positive">👎 Reject</button>
-            <button class="finding-btn clear ${v == null ? '' : ''}"          data-verdict="none">↺</button>
+          <div class="finding-body">
+            ${d.explain ? `<div class="finding-explain">${escape(d.explain)}</div>` : ''}
+            ${d.rule    ? `<div class="finding-rule"><b>Rule fired:</b> ${escape(d.rule)}</div>` : ''}
+            ${d.suppressedReason ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
+            ${d.confirmedNote    ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
+            <div class="finding-actions">
+              <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good"    title="Confirm real discrepancy">👍 Confirm</button>
+              <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"     title="Reject as false positive">👎 Reject</button>
+              <button class="finding-btn clear"                                  data-verdict="none">↺ Clear</button>
+              <button class="finding-btn jump"                                   data-jump="1" title="Show in source">🔍 Show in source</button>
+            </div>
+            <textarea class="finding-note" placeholder="Note (optional)…">${escape(fr.note || '')}</textarea>
           </div>
-          <textarea class="finding-note" placeholder="Note (optional)…">${escape(fr.note || '')}</textarea>
         </div>`}).join('')}
     </div>` : '<div style="color:#6b7280;font-size:13px;margin-bottom:14px">No field-level diffs — clean match.</div>'
 
@@ -655,6 +694,19 @@ function reviewerList() {
     .map(({ i }) => i)
 }
 
+// Pear view toggle — "Original" or "As Apple" (Argus template layout)
+state.pearView = 'original'
+document.addEventListener('change', (e) => {
+  if (e.target?.name !== 'pearView') return
+  state.pearView = e.target.value
+  document.querySelectorAll('.pvt-opt').forEach(l => l.classList.toggle('active', l.querySelector('input')?.checked))
+  // Re-render the client side
+  if (state.activeIdx >= 0) {
+    const m = state.result.matches[state.activeIdx]
+    renderReviewerSide('client', document.getElementById('pdfRevClient'), m, state.result.clientTenants)
+  }
+})
+
 async function openPdfReviewer(idx) {
   const list = reviewerList()
   if (!list.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
@@ -712,6 +764,14 @@ async function renderReviewerSide(side, host, match, tenants) {
     host.innerHTML = `<div style="padding:20px;color:#9ca3af">Tenant not present on this side.</div>`
     return
   }
+
+  // Client "View as Apple" — render the client's normalized tenant in the
+  // Argus 5-row template layout for direct visual comparison with the Apple side.
+  if (side === 'client' && state.pearView === 'as-apple') {
+    host.innerHTML = renderClientAsApple(tenant, match)
+    return
+  }
+
   let entry
   try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
 
@@ -864,6 +924,121 @@ function fmtCell(n, fmt) {
   if (fmt === 'pct')   return (n * 100).toFixed(2) + '%'
   if (Number.isInteger(n)) return n.toLocaleString()
   return Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+// "View as Apple" — render a client tenant in the Argus 5-row template layout.
+// Mirrors the actual Argus rent roll's column-by-column structure so a paralegal
+// can visually compare client vs argus in the SAME format.
+function renderClientAsApple(t, m) {
+  const flagged = new Set((m.diffs || []).map(d => d.field))
+  const psf = bestPsf(t)
+  const annualTotal  = t.baseRent?.annualTotal  ?? (psf != null && t.sqft ? psf * t.sqft : null)
+  const psfMonthly   = t.baseRent?.psfMonthly   ?? (psf != null ? psf / 12 : null)
+  const monthlyTotal = t.baseRent?.monthlyTotal ?? (annualTotal != null ? annualTotal / 12 : null)
+  const fc = (key) => flagged.has(key) ? 'flagged' : ''
+
+  // Argus's 5-row block by column:
+  //   Col 1: Tenant Name / Suite: NNN / lease dates / lease term / tenure
+  //   Col 2: SF / Building Share %
+  //   Col 3: Status / Contract / Lease Type / category
+  //   Col 4: psfAnnual / annualTotal / psfMonthly / monthlyTotal / Rental Value
+  //   Cols 5–7: rent steps (date / $/SF/yr / $/SF/mo)
+  //   Cols 9-10: free rent
+  //   Col 11: % rent
+  const steps = t.rentSteps || []
+  const freeRent = (t.freeRent || [])
+  const pr = t.percentRent
+
+  const stepRows = []
+  const stepMax = Math.max(1, steps.length, freeRent.length)
+  for (let i = 0; i < stepMax; i++) {
+    const s = steps[i] || {}
+    const fr = freeRent[i] || {}
+    stepRows.push(`
+      <tr>
+        <td class="apple-c1"></td>
+        <td class="apple-c2"></td>
+        <td class="apple-c3"></td>
+        <td class="apple-c4"></td>
+        <td class="apple-c5 ${fc('rent_step_date')}">${escape(s.effectiveDate || '')}</td>
+        <td class="apple-c6 ${fc('rent_step_amount')}">${s.psfAnnual != null ? '$' + s.psfAnnual.toFixed(2) : ''}</td>
+        <td class="apple-c7 ${fc('rent_step_amount')}">${s.psfMonthly != null ? '$' + s.psfMonthly.toFixed(2) : (s.psfAnnual != null ? '$' + (s.psfAnnual/12).toFixed(2) : '')}</td>
+        <td class="apple-c9 ${fc('free_rent')}">${escape(fr.startDate || '')}</td>
+        <td class="apple-c10 ${fc('free_rent')}">${fr.months != null ? fr.months + ' mo' : (fr.abatementPct != null ? (fr.abatementPct * 100).toFixed(0) + '%' : '')}</td>
+      </tr>`)
+  }
+
+  return `
+    <div class="apple-template">
+      <div class="apple-template-banner">
+        🍎 <b>Client viewed as Argus template</b> — same data, Argus layout
+      </div>
+      <table class="apple-template-table">
+        <thead>
+          <tr>
+            <th>General Tenant Information</th>
+            <th>SF / BS%</th>
+            <th>Status</th>
+            <th>Rent Details</th>
+            <th colspan="3">Rent Changes (Col 5–7)</th>
+            <th colspan="2">Free Rent (Col 9)</th>
+          </tr>
+          <tr class="apple-subhead">
+            <th></th>
+            <th>Initial Area</th>
+            <th>Contract</th>
+            <th>Rate Per Year</th>
+            <th>Date</th><th>$/SF-Annual</th><th>$/SF-Monthly</th>
+            <th>Date</th><th>Months / %</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="apple-c1 ${fc('tenant_name')}"><b>${escape(t.name || '—')}</b></td>
+            <td class="apple-c2 ${fc('sqft')}">${t.sqft != null ? Number(t.sqft).toLocaleString() : ''}</td>
+            <td class="apple-c3">Base</td>
+            <td class="apple-c4 ${fc('base_rent_psf') || fc('base_rent_annual')}">${psf != null ? '$' + psf.toFixed(2) : '—'}</td>
+            <td class="apple-c5"></td><td class="apple-c6"></td><td class="apple-c7"></td>
+            <td class="apple-c9"></td><td class="apple-c10"></td>
+          </tr>
+          <tr>
+            <td class="apple-c1">Suite: <b>${escape(t.suite || '—')}</b></td>
+            <td></td>
+            <td>Contract</td>
+            <td class="${fc('base_rent_annual')}">${annualTotal != null ? '$' + Number(annualTotal).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</td>
+            <td></td><td></td><td></td><td></td><td></td>
+          </tr>
+          <tr>
+            <td class="apple-c1 ${fc('lease_start') || fc('lease_end')}">${escape((t.leaseStart || '—') + ' – ' + (t.leaseEnd || '—'))}</td>
+            <td></td>
+            <td>—</td>
+            <td>${psfMonthly != null ? '$' + psfMonthly.toFixed(2) : '—'}</td>
+            <td></td><td></td><td></td><td></td><td></td>
+          </tr>
+          <tr>
+            <td class="apple-c1">—</td>
+            <td></td>
+            <td>—</td>
+            <td>${monthlyTotal != null ? '$' + Number(monthlyTotal).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</td>
+            <td></td><td></td><td></td><td></td><td></td>
+          </tr>
+          <tr>
+            <td class="apple-c1">Freehold</td>
+            <td></td>
+            <td></td>
+            <td>${annualTotal != null ? '$' + Number(annualTotal).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}</td>
+            <td></td><td></td><td></td><td></td><td></td>
+          </tr>
+          ${stepRows.join('')}
+          ${pr ? `<tr>
+            <td colspan="3"><b>% Rent</b></td>
+            <td class="${fc('pct_rent_breakpoint')}" colspan="2">BP: ${pr.breakpoint != null ? '$' + Number(pr.breakpoint).toLocaleString() : '—'}</td>
+            <td class="${fc('pct_rent_overage')}" colspan="2">Ov: ${pr.overagePct != null ? (pr.overagePct * 100).toFixed(2) + '%' : '—'}</td>
+            <td></td><td></td>
+          </tr>` : ''}
+        </tbody>
+      </table>
+    </div>`
 }
 
 function renderArgusCard(side, t, m) {

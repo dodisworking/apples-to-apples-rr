@@ -416,7 +416,24 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   background: #fef2f2; color: #991b1b;
   border-bottom: 1px solid #f3f4f6;
 }
-.pdf-reviewer-pear .pdf-reviewer-side-label { background: #f0fdf4; color: #065f46; }
+.pdf-reviewer-pear .pdf-reviewer-side-label {
+  background: #f0fdf4; color: #065f46;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.pear-view-toggle {
+  display: inline-flex; gap: 2px;
+  background: rgba(255,255,255,.7); border: 1px solid #bbf7d0; border-radius: 999px;
+  padding: 2px;
+  text-transform: none; letter-spacing: 0;
+}
+.pvt-opt {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 999px;
+  cursor: pointer; font-size: 10px; font-weight: 600;
+  color: #6b7280; letter-spacing: .04em;
+}
+.pvt-opt:has(input:checked) { background: #16a34a; color: #fff; }
+.pvt-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
 .pdf-reviewer-canvas {
   flex: 1; overflow: auto; padding: 12px;
   position: relative;
@@ -480,6 +497,47 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   box-shadow: inset 0 0 0 9999px rgba(220, 38, 38, 0.08);
 }
 
+/* "View Client as Apple" template — client data rendered in Argus's 5-row layout */
+.pdf-reviewer-canvas .apple-template {
+  background: #fef2f2; border: 2px solid #dc2626;
+  border-radius: 10px; padding: 12px;
+  width: 100%; max-width: 700px;
+  font-family: "Calibri", "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+.pdf-reviewer-canvas .apple-template-banner {
+  background: #dc2626; color: #fff;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  padding: 6px 10px; border-radius: 6px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.pdf-reviewer-canvas .apple-template-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 11px;
+}
+.pdf-reviewer-canvas .apple-template-table th,
+.pdf-reviewer-canvas .apple-template-table td {
+  padding: 4px 6px;
+  border: 1px solid #fecaca;
+  text-align: left;
+  vertical-align: middle;
+  background: #fff;
+}
+.pdf-reviewer-canvas .apple-template-table thead th {
+  background: #1e3a5f; color: #fff;
+  font-weight: 700; font-size: 10px; letter-spacing: .04em;
+  text-align: center;
+}
+.pdf-reviewer-canvas .apple-template-table .apple-subhead th {
+  background: #fef2f2; color: #991b1b;
+  font-size: 9px; font-weight: 600;
+}
+.pdf-reviewer-canvas .apple-template-table td.flagged {
+  background: #fee2e2;
+  outline: 2px solid #dc2626; outline-offset: -2px;
+  font-weight: 700;
+}
 .pdf-reviewer-canvas .argus-card {
   background: #fff; border: 1px solid #fecaca; border-radius: 12px;
   padding: 16px 20px; max-width: 520px; width: 100%;
@@ -593,7 +651,34 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .finding-head {
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
 }
+.finding-head:hover { opacity: .85; }
+.finding-toggle {
+  margin-left: auto;
+  font-size: 14px; color: #6b7280;
+  transition: transform .15s ease;
+}
+.finding-card.expanded .finding-toggle { transform: rotate(180deg); }
+.finding-body {
+  display: none;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0,0,0,.08);
+}
+.finding-card.expanded .finding-body { display: block; }
+.finding-explain {
+  font-size: 12px; color: #374151; line-height: 1.5;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.6);
+  border-radius: 8px;
+}
+.finding-btn.jump {
+  margin-left: auto;
+  background: #fff7ed; border-color: #fed7aa; color: #9a3412;
+}
+.finding-btn.jump:hover { background: #ffedd5; }
 .finding-sev {
   font-size: 9px; font-weight: 800; letter-spacing: .08em;
   padding: 2px 8px; border-radius: 999px;

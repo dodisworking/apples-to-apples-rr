@@ -252,7 +252,13 @@
           <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
         </div>
         <div class="pdf-reviewer-side pdf-reviewer-pear">
-          <div class="pdf-reviewer-side-label">🍐 PEAR · CLIENT</div>
+          <div class="pdf-reviewer-side-label">
+            <span>🍐 PEAR · CLIENT</span>
+            <div class="pear-view-toggle" role="radiogroup">
+              <label class="pvt-opt active"><input type="radio" name="pearView" value="original" checked><span>Original</span></label>
+              <label class="pvt-opt"><input type="radio" name="pearView" value="as-apple"><span>🍎 As Apple</span></label>
+            </div>
+          </div>
           <div class="pdf-reviewer-canvas" id="pdfRevClient"></div>
         </div>
       </div>
