@@ -562,6 +562,81 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .diff-list .badge.muted { background: #f3f4f6; color: #6b7280; }
 .diff-list .badge.good  { background: #d1fae5; color: #065f46; }
 
+/* ═══════════════════════════════════════════════════════
+   GOOGLE-DOCS-STYLE FINDING COMMENTS
+   Per-finding accept/reject cards listed in the drawer.
+   ═══════════════════════════════════════════════════════ */
+.findings-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.finding-card {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  position: relative;
+  transition: all .15s ease;
+}
+.finding-card.sev-HIGH   { background: #fef2f2; border-color: #fecaca; border-left-color: #dc2626; }
+.finding-card.sev-MEDIUM { background: #fff7ed; border-color: #fed7aa; border-left-color: #f97316; }
+.finding-card.sev-LOW    { background: #fefce8; border-color: #fde68a; border-left-color: #ca8a04; }
+.finding-card.suppressed { opacity: .55; }
+.finding-card.confirmed  { box-shadow: 0 0 0 2px #16a34a inset; }
+.finding-card.verdict-good {
+  background: #f0fdf4; border-color: #bbf7d0; border-left-color: #16a34a;
+}
+.finding-card.verdict-bad {
+  background: #fafafa; border-color: #e5e7eb; border-left-color: #9ca3af;
+  opacity: .7; text-decoration: line-through; text-decoration-color: #9ca3af;
+}
+.finding-card.verdict-bad .finding-vals { text-decoration: line-through; }
+.finding-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.finding-sev {
+  font-size: 9px; font-weight: 800; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(0,0,0,.08); color: #1f2937;
+}
+.finding-card.sev-HIGH   .finding-sev { background: #dc2626; color: #fff; }
+.finding-card.sev-MEDIUM .finding-sev { background: #f97316; color: #fff; }
+.finding-card.sev-LOW    .finding-sev { background: #ca8a04; color: #fff; }
+.finding-label {
+  font-weight: 700; color: #111827;
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.finding-vals { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.fv {
+  font-size: 12px;
+  padding: 4px 8px; border-radius: 6px;
+}
+.fv.apple { background: rgba(254, 226, 226, .5); }
+.fv.pear  { background: rgba(220, 252, 231, .5); }
+.finding-rule {
+  font-size: 11px; color: #6b7280; font-style: italic;
+  margin-bottom: 6px;
+}
+.finding-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.finding-btn {
+  border: 1px solid #e5e7eb; background: #fff; border-radius: 999px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+  transition: all .12s ease;
+}
+.finding-btn:hover { background: #f9fafb; }
+.finding-btn.good.active { background: #16a34a; color: #fff; border-color: #16a34a; }
+.finding-btn.bad.active  { background: #dc2626; color: #fff; border-color: #dc2626; }
+.finding-btn.clear { padding: 5px 10px; }
+.finding-note {
+  width: 100%; min-height: 32px;
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 6px 10px; font: inherit; font-size: 12px;
+  resize: vertical; background: #fff;
+}
+.finding-note:focus { outline: 2px solid #f97316; outline-offset: -1px; }
+
 .evidence-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   margin-bottom: 14px;

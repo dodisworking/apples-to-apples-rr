@@ -395,9 +395,53 @@ $('#reviewNote').addEventListener('input', (e) => {
   const m = state.result.matches[state.activeIdx]
   if (!m) return
   const key = m.suiteKey || m.suite
-  const r = state.reviews[key] || { verdict: null, note: '' }
-  r.note = e.target.value
+  const r = state.reviews[key] || {}
+  // Legacy tenant-level note (used when tenant is argus/client-only)
+  if (typeof r === 'object' && !r.verdict && !r.note && !('_tenantNote' in r)) r._tenantNote = ''
+  r._tenantNote = e.target.value
   state.reviews[key] = r
+  persistLearnings()
+})
+
+// Delegated handlers for per-finding accept/reject + note (Google Docs comments style)
+document.getElementById('drawerBody')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.finding-btn')
+  if (!btn) return
+  const card = btn.closest('.finding-card')
+  if (!card) return
+  const field = card.dataset.field
+  if (state.activeIdx < 0) return
+  const m = state.result.matches[state.activeIdx]
+  const key = m.suiteKey || m.suite
+  state.reviews[key] = state.reviews[key] || {}
+  // Migrate legacy tenant-level review shape if needed
+  if ('verdict' in state.reviews[key]) {
+    const legacy = state.reviews[key]
+    state.reviews[key] = { _tenantNote: legacy.note || '', __legacyVerdict: legacy.verdict }
+  }
+  const verdict = btn.dataset.verdict === 'none' ? null : btn.dataset.verdict
+  state.reviews[key][field] = state.reviews[key][field] || { verdict: null, note: '' }
+  state.reviews[key][field].verdict = verdict
+  // Reflect in UI
+  card.querySelectorAll('.finding-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.verdict === verdict)
+  })
+  card.classList.remove('verdict-good', 'verdict-bad')
+  if (verdict) card.classList.add('verdict-' + verdict)
+  persistLearnings()
+})
+
+document.getElementById('drawerBody')?.addEventListener('input', (e) => {
+  if (!e.target.classList?.contains('finding-note')) return
+  const card = e.target.closest('.finding-card')
+  if (!card) return
+  const field = card.dataset.field
+  if (state.activeIdx < 0) return
+  const m = state.result.matches[state.activeIdx]
+  const key = m.suiteKey || m.suite
+  state.reviews[key] = state.reviews[key] || {}
+  state.reviews[key][field] = state.reviews[key][field] || { verdict: null, note: '' }
+  state.reviews[key][field].note = e.target.value
   persistLearnings()
 })
 document.addEventListener('keydown', (e) => {
@@ -415,15 +459,30 @@ function openDrawer(idx) {
   if (!m) return
   state.activeIdx = idx
   const key = m.suiteKey || m.suite
-  const review = state.reviews[key] || { verdict: null, note: '' }
+  const review = state.reviews[key] || {}
+  const legacyVerdict = (typeof review === 'object' && 'verdict' in review) ? review.verdict : null
+  const legacyNote    = (typeof review === 'object' && '_tenantNote' in review) ? review._tenantNote
+                     : (typeof review === 'object' && 'note' in review)        ? review.note : ''
 
   $('#drawerTitle').innerHTML = `Suite <b>${escape(m.suite || '—')}</b> · ${escape(m.argus?.name || m.client?.name || '—')}`
   $('#drawerBody').innerHTML = renderDrawerBody(m)
 
+  // Tenant-level review controls in the drawer foot:
+  // Only show when there's no per-finding to attach to (argusOnly/clientOnly or clean match).
+  // When there ARE diffs, each finding has its own accept/reject card.
+  const hasDiffs = (m.diffs || []).length > 0
+  const showTenantLevel = m.flags?.argusOnly || m.flags?.clientOnly || !hasDiffs
+  const foot = document.querySelector('.drawer-foot')
+  if (foot) {
+    const buttons = foot.querySelector('.review-buttons')
+    const note    = foot.querySelector('.review-note')
+    if (buttons) buttons.style.display = showTenantLevel ? 'flex' : 'none'
+    if (note)    note.style.display    = showTenantLevel ? 'block' : 'none'
+  }
   document.querySelectorAll('.btn-review').forEach(b => {
-    b.classList.toggle('active', b.dataset.verdict === review.verdict)
+    b.classList.toggle('active', b.dataset.verdict === legacyVerdict)
   })
-  $('#reviewNote').value = review.note || ''
+  $('#reviewNote').value = legacyNote || ''
 
   $('#previewGrid').hidden = true
   $('#togglePreview').textContent = '📄 Show sources'
@@ -489,23 +548,45 @@ function renderDrawerBody(m) {
   const a = m.argus, c = m.client
   const diffs = m.diffs || []
   const flagged = new Set(diffs.map(d => d.field))
+  const suiteKey = m.suiteKey || m.suite || ''
+  const reviews = state.reviews[suiteKey] || {}
 
   const status =
     m.flags?.argusOnly  ? '<div class="note-item">This tenant is in Argus but <b>not found</b> in the client RR.</div>' :
     m.flags?.clientOnly ? '<div class="note-item">This tenant is in the client RR but <b>not found</b> in Argus.</div>' : ''
 
+  // Each finding gets a Google-Docs-style comment card with its OWN accept/reject + note.
+  // verdict per-finding is keyed by reviews[field] inside the per-tenant reviews map.
   const diffList = diffs.length ? `
-    <ul class="diff-list">
-      ${diffs.map(d => `
-        <li class="sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''}">
-          <span class="diff-sev">${d.severity || 'LOW'}</span>
-          <div class="diff-label">${escape(d.label || d.field)} ${d.suppressed ? '<span class="badge muted">muted by learning</span>' : ''} ${d.confirmed ? '<span class="badge good">confirmed by learning</span>' : ''}</div>
-          <div class="diff-values">Argus: <b>${escape(d.argusValue)}</b> · Client: <b>${escape(d.clientValue)}</b></div>
-          ${d.rule ? `<div class="diff-rule">${escape(d.rule)}</div>` : ''}
-          ${d.suppressedReason ? `<div class="diff-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
-          ${d.confirmedNote    ? `<div class="diff-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
-        </li>`).join('')}
-    </ul>` : '<div style="color:#6b7280;font-size:13px;margin-bottom:14px">No field-level diffs — clean match.</div>'
+    <div class="findings-list">
+      ${diffs.map((d, fi) => {
+        const fkey = d.field || ('idx' + fi)
+        const fr = (reviews && typeof reviews === 'object' && reviews[fkey]) || {}
+        const v = fr.verdict || null
+        return `
+        <div class="finding-card sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''} ${v ? 'verdict-' + v : ''}"
+             data-field="${escape(fkey)}">
+          <div class="finding-head">
+            <span class="finding-sev">${d.severity || 'LOW'}</span>
+            <span class="finding-label">${escape(d.label || d.field)}</span>
+            ${d.suppressed ? '<span class="badge muted">muted by learning</span>' : ''}
+            ${d.confirmed ? '<span class="badge good">confirmed by learning</span>' : ''}
+          </div>
+          <div class="finding-vals">
+            <div class="fv apple">🍎 <b>${escape(d.argusValue)}</b></div>
+            <div class="fv pear">🍐 <b>${escape(d.clientValue)}</b></div>
+          </div>
+          ${d.rule ? `<div class="finding-rule">${escape(d.rule)}</div>` : ''}
+          ${d.suppressedReason ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
+          ${d.confirmedNote    ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
+          <div class="finding-actions">
+            <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good"    title="Confirm real discrepancy">👍 Confirm</button>
+            <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"     title="Reject as false positive">👎 Reject</button>
+            <button class="finding-btn clear ${v == null ? '' : ''}"          data-verdict="none">↺</button>
+          </div>
+          <textarea class="finding-note" placeholder="Note (optional)…">${escape(fr.note || '')}</textarea>
+        </div>`}).join('')}
+    </div>` : '<div style="color:#6b7280;font-size:13px;margin-bottom:14px">No field-level diffs — clean match.</div>'
 
   const field = (label, v, key) => `
     <div class="field-row ${flagged.has(key) ? 'flagged' : ''}">
@@ -635,10 +716,9 @@ async function renderReviewerSide(side, host, match, tenants) {
   try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
 
   if (entry?.type === 'pdf') {
-    await buildIndex(entry, tenants || [])
-    const loc = entry.index.get(match.suiteKey || match.suite)
+    const loc = await locateInPdf(entry, tenant)
     if (!loc) {
-      host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate Suite ${escape(match.suite || '')} in this PDF.</div>`
+      host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
       return
     }
     const page = await entry.pdfDoc.getPage(loc.page)
@@ -837,35 +917,61 @@ async function loadPdfDoc(side) {
   return entry
 }
 
-async function buildIndex(entry, tenants) {
-  if (entry.type !== 'pdf' || entry.index.size) return
+// Locate a single tenant in the PDF on demand. More reliable than pre-building
+// an index — many client RRs (like Stanford) have no suite numbers at all, only
+// tenant names. We search by suite, name token, and tenant-name substring.
+async function locateInPdf(entry, tenant) {
+  if (entry.type !== 'pdf' || !tenant) return null
+
+  const suiteStr = tenant.suite ? String(tenant.suite).replace(/[^a-z0-9]/gi, '') : ''
+  const suiteRe = suiteStr ? new RegExp(`(^|\\s|#)0*${escapeRe(suiteStr)}\\b`, 'i') : null
+
+  // Build a list of name candidates: full name token by token, longest first
+  const nameCandidates = []
+  if (tenant.name) {
+    // Try the longest 2-word sequence first ("Academy Sports"), then individual tokens
+    const norm = tenant.name.replace(/[,&]/g, ' ').replace(/\s+/g, ' ').trim()
+    const tokens = norm.split(' ').filter(w => w.length > 2)
+    if (tokens.length >= 2) nameCandidates.push(tokens.slice(0, 2).join(' '))
+    for (const t of tokens) if (t.length > 3 && !nameCandidates.includes(t)) nameCandidates.push(t)
+  }
+
   const pdfDoc = entry.pdfDoc
   for (let p = 1; p <= pdfDoc.numPages; p++) {
     const page = await pdfDoc.getPage(p)
     const viewport = page.getViewport({ scale: 1.0 })
     const tc = await page.getTextContent()
-    for (const t of tenants) {
-      const key = t.suiteKey || t.suite
-      if (!key || entry.index.has(key)) continue
-      const suiteStr = String(t.suite || '').replace(/[^a-z0-9]/gi, '')
-      if (!suiteStr) continue
-      const suiteRe = new RegExp(`(^|\\s|#)0*${escapeRe(suiteStr)}\\b`, 'i')
-      const nameTok = t.name ? t.name.split(/[\s,&]/).find(w => w.length > 3) : null
-      const nameRe = nameTok ? new RegExp(escapeRe(nameTok), 'i') : null
+
+    // Try each candidate in order of confidence; first hit wins
+    const tryRegex = (re) => {
       const hits = []
       for (const item of tc.items) {
-        const s = item.str
-        if (!(suiteRe.test(s) || (nameRe && nameRe.test(s)))) continue
+        if (!re.test(item.str)) continue
         const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
         hits.push({ x: tr[4], y: tr[5] - item.height, w: item.width, h: item.height })
       }
       if (hits.length) {
         const box = union(hits)
-        box.x -= 6; box.y -= 4; box.w += 12; box.h += 8
-        entry.index.set(key, { page: p, rect: box })
+        // Expand horizontally to cover the row (client RRs tend to have data spanning the page)
+        box.x = Math.max(0, box.x - 8)
+        box.y -= 4
+        box.w = Math.min(viewport.width - box.x, box.w + viewport.width * 0.7)
+        box.h += 8
+        return { page: p, rect: box }
       }
+      return null
+    }
+
+    if (suiteRe) {
+      const hit = tryRegex(suiteRe)
+      if (hit) return hit
+    }
+    for (const cand of nameCandidates) {
+      const hit = tryRegex(new RegExp(escapeRe(cand).replace(/\s+/g, '\\s*'), 'i'))
+      if (hit) return hit
     }
   }
+  return null
 }
 
 function union(boxes) {
@@ -897,10 +1003,8 @@ async function renderSide(side, host, match, tenants) {
   if (!entry) { host.innerHTML = '<div class="preview-placeholder">Source not loaded — re-upload to see preview.</div>'; return }
   if (entry.type === 'xlsx') return renderXlsxRow(host, tenant, match)
 
-  try { await buildIndex(entry, tenants || []) } catch (e) { console.warn('index', e) }
-  const key = match.suiteKey || match.suite
-  const loc = entry.index.get(key)
-  if (!loc) { host.innerHTML = `<div class="preview-placeholder">Couldn't locate Suite ${escape(match.suite || '')} in this PDF.</div>`; return }
+  const loc = await locateInPdf(entry, tenant)
+  if (!loc) { host.innerHTML = `<div class="preview-placeholder">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`; return }
 
   const page = await entry.pdfDoc.getPage(loc.page)
   const scale = 1.3
