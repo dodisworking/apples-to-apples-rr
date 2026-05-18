@@ -6,13 +6,15 @@
 
 FROM node:20-slim
 
-# Minimal LibreOffice install — calc + writer cores + fonts.
+# LibreOffice + Java JRE (soffice's javaldx needs Java to function correctly).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       libreoffice-core \
       libreoffice-calc \
       libreoffice-writer \
       libreoffice-common \
+      libreoffice-java-common \
+      default-jre-headless \
       fonts-liberation \
       fonts-dejavu \
       ca-certificates && \
