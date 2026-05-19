@@ -486,6 +486,13 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   flex: 1; min-height: 0;
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
   padding: 8px;
+  transition: grid-template-columns .25s ease;
+}
+.pdf-reviewer-body.focus-apple { grid-template-columns: 1fr 0; }
+.pdf-reviewer-body.focus-pear  { grid-template-columns: 0 1fr; }
+.pdf-reviewer-body.focus-apple .pdf-reviewer-pear,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-apple {
+  display: none;
 }
 .pdf-reviewer-side {
   background: #fff; border: 2px solid #e5e7eb; border-radius: 10px;
@@ -500,9 +507,30 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   background: #fef2f2; color: #991b1b;
   border-bottom: 1px solid #f3f4f6;
 }
-.pdf-reviewer-pear .pdf-reviewer-side-label {
-  background: #f0fdf4; color: #065f46;
+.pdf-reviewer-pear .pdf-reviewer-side-label,
+.pdf-reviewer-apple .pdf-reviewer-side-label {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.pdf-reviewer-pear .pdf-reviewer-side-label { background: #f0fdf4; color: #065f46; }
+.side-focus-btn {
+  font-family: inherit; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em;
+  background: rgba(255,255,255,.7); color: #374151;
+  border: 1px solid currentColor; border-radius: 999px;
+  padding: 3px 10px; cursor: pointer; opacity: .85;
+}
+.side-focus-btn:hover { opacity: 1; background: #fff; }
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn {
+  background: #dc2626; color: #fff; border-color: #dc2626;
+}
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn::before,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn::before {
+  content: '✕ ';
+}
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn {
+  /* Hide the original glyph text — pseudo provides the close icon */
 }
 .pear-view-toggle {
   display: inline-flex; gap: 2px;

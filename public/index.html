@@ -271,9 +271,12 @@
           <button id="pdfReviewerClose" class="btn ghost btn-sm">✕ Close</button>
         </div>
       </div>
-      <div class="pdf-reviewer-body">
+      <div class="pdf-reviewer-body" id="pdfReviewerBody">
         <div class="pdf-reviewer-side pdf-reviewer-apple">
-          <div class="pdf-reviewer-side-label">🍎 APPLE · ARGUS</div>
+          <div class="pdf-reviewer-side-label">
+            <span>🍎 APPLE · ARGUS</span>
+            <button class="side-focus-btn" data-focus="apple" title="Expand this side">⛶ Expand</button>
+          </div>
           <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
         </div>
         <div class="pdf-reviewer-side pdf-reviewer-pear">
@@ -283,6 +286,7 @@
               <label class="pvt-opt active"><input type="radio" name="pearView" value="original" checked><span>Original</span></label>
               <label class="pvt-opt"><input type="radio" name="pearView" value="as-apple"><span>🍎 As Apple</span></label>
             </div>
+            <button class="side-focus-btn" data-focus="pear" title="Expand this side">⛶ Expand</button>
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevClient"></div>
         </div>

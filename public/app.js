@@ -834,6 +834,32 @@ $('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
 $('#pdfNext').addEventListener('click', () => stepReviewer(+1))
 $('#pdfMatchSelector').addEventListener('change', (e) => openPdfReviewer(parseInt(e.target.value, 10)))
 
+// Side-focus — click "⛶ Expand" on either side to maximize it; click again to restore 50/50
+state.focusSide = null
+document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.side-focus-btn')
+  if (!btn) return
+  const which = btn.dataset.focus
+  const body = document.getElementById('pdfReviewerBody')
+  if (state.focusSide === which) {
+    state.focusSide = null
+    body.classList.remove('focus-apple', 'focus-pear')
+    btn.textContent = '⛶ Expand'
+  } else {
+    state.focusSide = which
+    body.classList.remove('focus-apple', 'focus-pear')
+    body.classList.add('focus-' + which)
+    // Reset all expand buttons, then mark the active one as "Restore"
+    document.querySelectorAll('.side-focus-btn').forEach(b => { b.textContent = b.dataset.focus === which ? '✕ Close fullscreen' : '⛶ Expand' })
+  }
+  // Re-render the visible side(s) so canvas/table picks up the new width.
+  if (state.activeIdx >= 0) {
+    const m = state.result.matches[state.activeIdx]
+    if (state.focusSide !== 'pear')  renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+    if (state.focusSide !== 'apple') renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+  }
+})
+
 // Zoom controls — multiply both PDF and XLSX renders by this factor
 state.pdfZoom = 1.0   // 1.0 = fit (PDF default 1.7x baseline; XLSX default 1.0x)
 $('#pdfZoomIn')   .addEventListener('click', () => setPdfZoom(Math.min(3.5, state.pdfZoom * 1.25)))
