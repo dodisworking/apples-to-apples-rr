@@ -834,6 +834,21 @@ $('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
 $('#pdfNext').addEventListener('click', () => stepReviewer(+1))
 $('#pdfMatchSelector').addEventListener('change', (e) => openPdfReviewer(parseInt(e.target.value, 10)))
 
+// Zoom controls — multiply both PDF and XLSX renders by this factor
+state.pdfZoom = 1.0   // 1.0 = fit (PDF default 1.7x baseline; XLSX default 1.0x)
+$('#pdfZoomIn')   .addEventListener('click', () => setPdfZoom(Math.min(3.5, state.pdfZoom * 1.25)))
+$('#pdfZoomOut')  .addEventListener('click', () => setPdfZoom(Math.max(0.5, state.pdfZoom / 1.25)))
+$('#pdfZoomReset').addEventListener('click', () => setPdfZoom(1.0))
+function setPdfZoom(z) {
+  state.pdfZoom = z
+  $('#pdfZoomLabel').textContent = Math.round(z * 100) + '%'
+  if (state.activeIdx >= 0) {
+    const m = state.result.matches[state.activeIdx]
+    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+  }
+}
+
 document.addEventListener('keydown', (e) => {
   if ($('#pdfReviewer').getAttribute('aria-hidden') !== 'false') return
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -930,6 +945,13 @@ async function renderReviewerSide(side, host, match, tenants) {
     return
   }
 
+  // If a specific finding is active, target that finding's value for precise highlight.
+  let targetValue = null
+  if (state.activeFieldKey && state.activeFieldKey !== 'tenant_presence') {
+    const diff = (match.diffs || []).find(d => d.field === state.activeFieldKey)
+    if (diff) targetValue = side === 'argus' ? diff.argusValue : diff.clientValue
+  }
+
   // Client "View as Apple" — render the client's normalized tenant in the
   // Argus 5-row template layout for direct visual comparison with the Apple side.
   if (side === 'client' && state.pearView === 'as-apple') {
@@ -941,13 +963,14 @@ async function renderReviewerSide(side, host, match, tenants) {
   try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
 
   if (entry?.type === 'pdf') {
-    const loc = await locateInPdf(entry, tenant)
+    const loc = await locateInPdf(entry, tenant, { targetValue })
     if (!loc) {
       host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
       return
     }
     const page = await entry.pdfDoc.getPage(loc.page)
-    const scale = 1.7
+    // Big-enough default + zoomable
+    const scale = 1.9 * (state.pdfZoom || 1.0)
     const vp = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
     canvas.width = vp.width; canvas.height = vp.height
@@ -964,10 +987,11 @@ async function renderReviewerSide(side, host, match, tenants) {
     host.appendChild(rect)
     host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 80)
   } else {
-    // XLSX side → render the actual sheet as a styled table with the tenant rows highlighted
+    // XLSX side → render the actual sheet as a styled table with tenant rows highlighted.
+    // When a specific finding is active, also pinpoint the cell holding its value.
     const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
     if (sheets?.length) {
-      renderXlsxSheet(host, sheets[0], match, side, tenants || [])
+      renderXlsxSheet(host, sheets[0], match, side, tenants || [], { targetValue })
     } else {
       host.innerHTML = renderArgusCard(side, tenant, match)
     }
@@ -978,7 +1002,7 @@ async function renderReviewerSide(side, host, match, tenants) {
 // Uses cell-level styles extracted server-side (fills, fonts, alignment,
 // borders, column widths, merged cells, number formats). Looks like
 // opening the workbook in Excel.
-function renderXlsxSheet(host, sheet, match, side, tenants) {
+function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
   const rows = sheet.rows || []
   if (!rows.length) {
     host.innerHTML = '<div style="padding:20px;color:#9ca3af">(empty sheet)</div>'
@@ -987,6 +1011,8 @@ function renderXlsxSheet(host, sheet, match, side, tenants) {
   const styled = sheet.styled || { colWidths: [], rowHeights: [], merges: [], cells: [] }
   const styledCells = styled.cells || []
   const merges = styled.merges || []
+  const targetValue = opts.targetValue || null
+  const valueNeedles = targetValue ? buildValueNeedles(targetValue) : []
 
   // Build a covered map for merged cells (suppresses rendering of cells inside a merge except the top-left)
   const covered = new Set()
@@ -1009,11 +1035,12 @@ function renderXlsxSheet(host, sheet, match, side, tenants) {
   const colCount = Math.max(...rows.map(r => r.length))
 
   // colgroup for column widths (Excel char-width → pixels approx)
-  let html = '<div class="xlsx-sheet"><table class="xlsx-table"><colgroup>'
+  const zoom = state.pdfZoom || 1.0
+  let html = `<div class="xlsx-sheet" style="font-size:${Math.round(11 * zoom)}px"><table class="xlsx-table"><colgroup>`
   html += '<col class="xlsx-col-rownum">'
   for (let c = 0; c < colCount; c++) {
     const w = styled.colWidths?.[c]
-    const px = w ? Math.round(w * 7.5) : 80          // Excel char ≈ 7.5px
+    const px = w ? Math.round(w * 7.5 * zoom) : Math.round(80 * zoom)
     html += `<col style="width:${px}px">`
   }
   html += '</colgroup><tbody>'
@@ -1037,7 +1064,14 @@ function renderXlsxSheet(host, sheet, match, side, tenants) {
       const text = raw == null || raw === '' ? '' : (typeof raw === 'number' ? fmtCell(raw, styleObj.fmt) : String(raw))
       const css = cellCss(styleObj)
       const mergeAttr = merge ? ` rowspan="${merge.rowSpan}" colspan="${merge.colSpan}"` : ''
-      html += `<td${mergeAttr}${css ? ` style="${css}"` : ''}>${escape(text)}</td>`
+      // Pinpoint highlight: if this cell contains the active finding's target value,
+      // mark it with a red outline + pulse — the precise red box on the cell.
+      let cellHit = ''
+      if (valueNeedles.length && isInBlock && raw != null && raw !== '') {
+        const cellText = String(raw)
+        if (valueNeedles.some(n => cellText.includes(n))) cellHit = ' xlsx-cell-hit'
+      }
+      html += `<td${mergeAttr} class="${cellHit.trim()}"${css ? ` style="${css}"` : ''}>${escape(text)}</td>`
     }
     html += '</tr>'
   })
@@ -1047,8 +1081,12 @@ function renderXlsxSheet(host, sheet, match, side, tenants) {
   host.style.position = 'relative'
 
   if (blockStart >= 0) {
-    const target = host.querySelector(`tr[data-row="${blockStart + 1}"]`)
-    if (target) setTimeout(() => target.scrollIntoView({ block: 'center', behavior: 'instant' }), 50)
+    // Prefer scrolling the highlighted cell into view if we found one; else the block row
+    setTimeout(() => {
+      const hit = host.querySelector('.xlsx-cell-hit')
+      const target = hit || host.querySelector(`tr[data-row="${blockStart + 1}"]`)
+      if (target) target.scrollIntoView({ block: 'center', behavior: 'instant' })
+    }, 50)
   }
 }
 
@@ -1257,19 +1295,25 @@ async function loadPdfDoc(side) {
   return entry
 }
 
-// Locate a single tenant in the PDF on demand. More reliable than pre-building
-// an index — many client RRs (like Stanford) have no suite numbers at all, only
-// tenant names. We search by suite, name token, and tenant-name substring.
-async function locateInPdf(entry, tenant) {
+// Locate a tenant + (optionally) a specific field value in the PDF.
+//
+// Two-phase search:
+//  1. Find the TENANT'S row vertically (page + y-band) using suite # or name tokens.
+//  2. If a target value is provided (e.g. the client value of the active finding),
+//     search WITHIN that y-band ± 30pt for the value text and return a tight box
+//     around it. Otherwise return the row-level box.
+//
+// This makes the red rectangle point at the exact cell that caused the discrepancy,
+// not just the whole tenant row.
+async function locateInPdf(entry, tenant, opts = {}) {
   if (entry.type !== 'pdf' || !tenant) return null
+  const targetValue = opts.targetValue || null
 
   const suiteStr = tenant.suite ? String(tenant.suite).replace(/[^a-z0-9]/gi, '') : ''
   const suiteRe = suiteStr ? new RegExp(`(^|\\s|#)0*${escapeRe(suiteStr)}\\b`, 'i') : null
 
-  // Build a list of name candidates: full name token by token, longest first
   const nameCandidates = []
   if (tenant.name) {
-    // Try the longest 2-word sequence first ("Academy Sports"), then individual tokens
     const norm = tenant.name.replace(/[,&]/g, ' ').replace(/\s+/g, ' ').trim()
     const tokens = norm.split(' ').filter(w => w.length > 2)
     if (tokens.length >= 2) nameCandidates.push(tokens.slice(0, 2).join(' '))
@@ -1282,36 +1326,75 @@ async function locateInPdf(entry, tenant) {
     const viewport = page.getViewport({ scale: 1.0 })
     const tc = await page.getTextContent()
 
-    // Try each candidate in order of confidence; first hit wins
-    const tryRegex = (re) => {
-      const hits = []
-      for (const item of tc.items) {
-        if (!re.test(item.str)) continue
+    // Phase 1: find the tenant's anchor item (first item that matches suite or name).
+    let anchor = null
+    const matchesAnchor = (s) => {
+      if (suiteRe && suiteRe.test(s)) return true
+      return nameCandidates.some(c => new RegExp(escapeRe(c).replace(/\s+/g, '\\s*'), 'i').test(s))
+    }
+    for (const item of tc.items) {
+      if (matchesAnchor(item.str)) {
         const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
-        hits.push({ x: tr[4], y: tr[5] - item.height, w: item.width, h: item.height })
+        anchor = { x: tr[4], y: tr[5] - item.height, w: item.width, h: item.height }
+        break
       }
-      if (hits.length) {
-        const box = union(hits)
-        // Expand horizontally to cover the row (client RRs tend to have data spanning the page)
-        box.x = Math.max(0, box.x - 8)
-        box.y -= 4
-        box.w = Math.min(viewport.width - box.x, box.w + viewport.width * 0.7)
-        box.h += 8
-        return { page: p, rect: box }
+    }
+    if (!anchor) continue
+
+    // Phase 2: if we have a target value, search within ±60pt vertical band of the anchor.
+    if (targetValue) {
+      const valueNeedles = buildValueNeedles(targetValue)
+      const band = { yMin: anchor.y - 30, yMax: anchor.y + anchor.h + 30 }
+      const valueHits = []
+      for (const item of tc.items) {
+        const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
+        const top = tr[5] - item.height
+        if (top < band.yMin || top > band.yMax) continue
+        const s = item.str
+        if (valueNeedles.some(n => s.includes(n))) {
+          valueHits.push({ x: tr[4], y: top, w: item.width, h: item.height })
+        }
       }
-      return null
+      if (valueHits.length) {
+        const box = union(valueHits)
+        box.x -= 4; box.y -= 3; box.w += 8; box.h += 6
+        return { page: p, rect: box, precision: 'value' }
+      }
     }
 
-    if (suiteRe) {
-      const hit = tryRegex(suiteRe)
-      if (hit) return hit
+    // Fall back: tenant row-level box (wide horizontal sweep)
+    const box = {
+      x: Math.max(0, anchor.x - 8),
+      y: anchor.y - 4,
+      w: Math.min(viewport.width - Math.max(0, anchor.x - 8), anchor.w + viewport.width * 0.7),
+      h: anchor.h + 8,
     }
-    for (const cand of nameCandidates) {
-      const hit = tryRegex(new RegExp(escapeRe(cand).replace(/\s+/g, '\\s*'), 'i'))
-      if (hit) return hit
-    }
+    return { page: p, rect: box, precision: 'row' }
   }
   return null
+}
+
+// Build a list of substrings to search for given a finding's value string.
+// Handles things like "$503,274" → ["503,274", "503274", "503274.00"], etc.
+function buildValueNeedles(v) {
+  if (v == null || v === '' || v === '—') return []
+  const s = String(v).trim()
+  const out = new Set([s])
+  // Strip $ and currency formatting
+  const stripped = s.replace(/[$,]/g, '').replace(/\s+/g, '')
+  if (stripped) out.add(stripped)
+  // Remove "/SF/yr", "/SF/mo", "/yr", "/mo" suffixes
+  const noUnit = stripped.replace(/\/?(SF\/yr|SF\/mo|yr|mo|sf|psf|annual|monthly)$/i, '')
+  if (noUnit && noUnit !== stripped) out.add(noUnit)
+  // Number without decimal (e.g. "503274" from "503,274.00")
+  const num = parseFloat(stripped)
+  if (isFinite(num)) {
+    out.add(String(Math.round(num)))
+    out.add(num.toFixed(2))
+    out.add(num.toLocaleString('en-US'))
+    out.add(num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  }
+  return Array.from(out).filter(x => x && x.length >= 2)
 }
 
 function union(boxes) {
@@ -1338,12 +1421,19 @@ async function renderSide(side, host, match, tenants) {
     host.innerHTML = '<div class="preview-placeholder">Not present on this side.</div>'
     return
   }
+  // Field-level target so red box hits the SPECIFIC value, not just the row
+  let targetValue = null
+  if (state.activeFieldKey && state.activeFieldKey !== 'tenant_presence') {
+    const diff = (match.diffs || []).find(d => d.field === state.activeFieldKey)
+    if (diff) targetValue = side === 'argus' ? diff.argusValue : diff.clientValue
+  }
+
   let entry
   try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
   if (!entry) { host.innerHTML = '<div class="preview-placeholder">Source not loaded — re-upload to see preview.</div>'; return }
   if (entry.type === 'xlsx') return renderXlsxRow(host, tenant, match)
 
-  const loc = await locateInPdf(entry, tenant)
+  const loc = await locateInPdf(entry, tenant, { targetValue })
   if (!loc) { host.innerHTML = `<div class="preview-placeholder">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`; return }
 
   const page = await entry.pdfDoc.getPage(loc.page)
