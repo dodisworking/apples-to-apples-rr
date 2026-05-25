@@ -275,8 +275,8 @@
         </div>
       </div>
       <div class="pdf-reviewer-body" id="pdfReviewerBody">
-        <div class="pdf-reviewer-side pdf-reviewer-apple">
-          <div class="pdf-reviewer-side-label" data-focus="apple" title="Click to expand fullscreen (or press 1)">
+        <div class="pdf-reviewer-side pdf-reviewer-apple" id="pdfSideApple">
+          <div class="pdf-reviewer-side-label" data-focus="apple" title="Drag the divider to resize · or click to make this side bigger">
             <span class="side-label-text">🍎 APPLE · ARGUS</span>
             <div class="side-label-actions">
               <button class="side-action-btn" data-open-original="argus" title="Open original Argus file in a new tab">📥 Open file</button>
@@ -285,8 +285,14 @@
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
         </div>
-        <div class="pdf-reviewer-side pdf-reviewer-pear">
-          <div class="pdf-reviewer-side-label" data-focus="pear" title="Click to expand fullscreen (or press 2)">
+
+        <!-- Drag-resizable divider between Apple and Pear -->
+        <div class="pdf-reviewer-divider" id="pdfReviewerDivider" title="Drag to resize · double-click to reset 50/50">
+          <div class="divider-grip"></div>
+        </div>
+
+        <div class="pdf-reviewer-side pdf-reviewer-pear" id="pdfSidePear">
+          <div class="pdf-reviewer-side-label" data-focus="pear" title="Drag the divider to resize · or click to make this side bigger">
             <span class="side-label-text">🍐 PEAR · CLIENT</span>
             <div class="side-label-actions">
               <div class="pear-view-toggle" role="radiogroup">

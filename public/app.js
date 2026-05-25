@@ -958,6 +958,64 @@ document.addEventListener('change', (e) => {
   }
 })
 
+// ─── Drag-resizable divider between Apple and Pear sides ────
+// User reported the all-or-nothing Expand button isn't enough; they want to
+// see both at once and resize on the fly. Divider lets them grab the column
+// boundary and drag left/right. Double-click resets to 50/50.
+function wirePdfDivider() {
+  const divider = document.getElementById('pdfReviewerDivider')
+  const body = document.getElementById('pdfReviewerBody')
+  if (!divider || !body || divider.dataset.wired) return
+  divider.dataset.wired = '1'
+
+  let dragging = false
+  let startX = 0
+  let startLeftPct = 50
+
+  const applySplit = (leftPct) => {
+    leftPct = Math.max(15, Math.min(85, leftPct))
+    body.style.setProperty('--pdf-split', `${leftPct}fr`)
+    body.style.setProperty('--pdf-split-r', `${100 - leftPct}fr`)
+    state.splitPct = leftPct
+  }
+
+  divider.addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    dragging = true
+    startX = e.clientX
+    const rect = body.getBoundingClientRect()
+    startLeftPct = ((rect.width * (state.splitPct ?? 50) / 100) / rect.width) * 100
+    divider.classList.add('dragging')
+    body.classList.add('dragging')
+  })
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return
+    const rect = body.getBoundingClientRect()
+    const dxPct = ((e.clientX - startX) / rect.width) * 100
+    applySplit(startLeftPct + dxPct)
+  })
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return
+    dragging = false
+    divider.classList.remove('dragging')
+    body.classList.remove('dragging')
+    // Re-render both sides at their new widths
+    if (state.activeIdx >= 0) {
+      const m = state.result.matches[state.activeIdx]
+      renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+      renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+    }
+  })
+  divider.addEventListener('dblclick', () => {
+    applySplit(50)
+    if (state.activeIdx >= 0) {
+      const m = state.result.matches[state.activeIdx]
+      renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+      renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+    }
+  })
+}
+
 async function openPdfReviewer(idx) {
   const list = reviewerList()
   if (!list.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
@@ -979,8 +1037,13 @@ async function openPdfReviewer(idx) {
   $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
 
   $('#pdfReviewer').setAttribute('aria-hidden', 'false')
+  wirePdfDivider()
 
-  // Render both sides
+  // Wait two animation frames so the modal's flex layout has settled before
+  // we ask host.clientWidth — otherwise PDF fit-scale uses a stale (often 0)
+  // width and the PDF renders microscopic.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+
   await Promise.all([
     renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants),
     renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants),
@@ -1040,14 +1103,14 @@ async function renderReviewerSide(side, host, match, tenants) {
       return
     }
     const page = await entry.pdfDoc.getPage(loc.page)
-    // Fit-to-container scale: rescale so the rendered PDF fills the current
-    // host width (minus padding), then multiply by the user's zoom factor.
-    // This is what makes 'expand' actually enlarge the PDF — the canvas grows
-    // to match the new container, instead of staying frozen at 1.9×.
+    // Fit-to-container scale — always honor the actual host width so the PDF
+    // fills (not overflows, not floats tiny). Multiply by user's zoom factor.
+    // requestAnimationFrame above guaranteed layout is settled before this.
     const baseVp = page.getViewport({ scale: 1.0 })
-    const hostWidth = Math.max(400, host.clientWidth - 24)   // 24 = padding
+    const containerW = host.clientWidth || 600
+    const hostWidth = Math.max(200, containerW - 24)   // 24 = padding
     const fitScale = hostWidth / baseVp.width
-    const scale = Math.max(1.0, fitScale) * (state.pdfZoom || 1.0)
+    const scale = fitScale * (state.pdfZoom || 1.0)
     const vp = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
     canvas.width = vp.width; canvas.height = vp.height

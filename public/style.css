@@ -450,7 +450,7 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
    ═══════════════════════════════════════════════════════ */
 .pdf-reviewer {
   position: fixed; inset: 0; z-index: 90;
-  background: #fafafa;
+  background: #f3f4f6;
   display: none;
   flex-direction: column;
 }
@@ -501,16 +501,44 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 }
 .pdf-reviewer-body {
   flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  padding: 8px;
-  transition: grid-template-columns .25s ease;
+  display: grid;
+  grid-template-columns: var(--pdf-split, 1fr) 8px var(--pdf-split-r, 1fr);
+  gap: 0;
+  padding: 6px;
+  transition: grid-template-columns .2s ease;
 }
-.pdf-reviewer-body.focus-apple { grid-template-columns: 1fr 0; }
-.pdf-reviewer-body.focus-pear  { grid-template-columns: 0 1fr; }
+/* Fullscreen modes (button or keyboard 1/2). Divider hidden, only one side. */
+.pdf-reviewer-body.focus-apple { grid-template-columns: 1fr 0 0; }
+.pdf-reviewer-body.focus-pear  { grid-template-columns: 0 0 1fr; }
 .pdf-reviewer-body.focus-apple .pdf-reviewer-pear,
-.pdf-reviewer-body.focus-pear  .pdf-reviewer-apple {
-  display: none;
+.pdf-reviewer-body.focus-apple .pdf-reviewer-divider,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-apple,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-divider { display: none; }
+
+/* Drag-resizable divider between the two sides */
+.pdf-reviewer-divider {
+  background: linear-gradient(180deg, #fef2f2, #f0fdf4);
+  cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+  border-left: 1px solid #fecaca;
+  border-right: 1px solid #bbf7d0;
+  position: relative;
+  transition: background .15s ease;
 }
+.pdf-reviewer-divider:hover,
+.pdf-reviewer-divider.dragging {
+  background: linear-gradient(180deg, #fecaca, #bbf7d0);
+}
+.pdf-reviewer-divider .divider-grip {
+  width: 4px; height: 60px;
+  background: rgba(0,0,0,.25); border-radius: 2px;
+}
+.pdf-reviewer-divider:hover .divider-grip,
+.pdf-reviewer-divider.dragging .divider-grip {
+  background: rgba(0,0,0,.55);
+}
+/* While dragging, disable transitions for smooth resize */
+.pdf-reviewer-body.dragging { transition: none; }
 .pdf-reviewer-side {
   background: #fff; border: 2px solid #e5e7eb; border-radius: 10px;
   display: flex; flex-direction: column; overflow: hidden;
