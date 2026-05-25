@@ -861,12 +861,18 @@ function setFocusSide(which) {
   state.focusSide = which
   body.classList.remove('focus-apple', 'focus-pear')
   if (which) body.classList.add('focus-' + which)
-  // Re-render visible sides so canvas/table pick up the new width
-  if (state.activeIdx >= 0) {
+
+  // The grid-template-columns CSS transition takes ~250ms. Wait for it to
+  // finish before re-rendering, so the canvas container has its FINAL width
+  // when we compute fit-scale. Without this delay, the PDF re-renders at
+  // the still-shrinking pre-transition width.
+  const doRender = () => {
+    if (state.activeIdx < 0) return
     const m = state.result.matches[state.activeIdx]
     if (state.focusSide !== 'pear')  renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
     if (state.focusSide !== 'apple') renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
   }
+  setTimeout(doRender, 280)
 }
 
 document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
@@ -1034,8 +1040,14 @@ async function renderReviewerSide(side, host, match, tenants) {
       return
     }
     const page = await entry.pdfDoc.getPage(loc.page)
-    // Big-enough default + zoomable
-    const scale = 1.9 * (state.pdfZoom || 1.0)
+    // Fit-to-container scale: rescale so the rendered PDF fills the current
+    // host width (minus padding), then multiply by the user's zoom factor.
+    // This is what makes 'expand' actually enlarge the PDF — the canvas grows
+    // to match the new container, instead of staying frozen at 1.9×.
+    const baseVp = page.getViewport({ scale: 1.0 })
+    const hostWidth = Math.max(400, host.clientWidth - 24)   // 24 = padding
+    const fitScale = hostWidth / baseVp.width
+    const scale = Math.max(1.0, fitScale) * (state.pdfZoom || 1.0)
     const vp = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
     canvas.width = vp.width; canvas.height = vp.height

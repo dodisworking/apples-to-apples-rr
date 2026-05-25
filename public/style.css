@@ -620,6 +620,13 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   border-collapse: collapse;
   font-size: 11px;
   table-layout: fixed;
+  transition: font-size .2s ease;
+}
+/* When a side is focused fullscreen, bump the XLSX font so the bigger
+   container actually reads bigger. (PDF re-renders at fit-scale on its own.) */
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .xlsx-table,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .xlsx-table {
+  font-size: 15px;
 }
 .pdf-reviewer-canvas .xlsx-table col.xlsx-col-rownum { width: 36px; }
 .pdf-reviewer-canvas .xlsx-table th,
