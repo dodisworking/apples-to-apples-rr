@@ -256,7 +256,12 @@
       <div class="pdf-reviewer-head">
         <div class="pdf-reviewer-title">
           <span>📄 PDF Cross-Reference</span>
-          <select id="pdfMatchSelector" class="pdf-match-select" aria-label="Jump to discrepancy"></select>
+          <div class="pdf-finding-select-wrap">
+            <button id="pdfPrev" class="pdf-step-arrow" aria-label="Previous finding" title="Previous finding (←)">◀</button>
+            <select id="pdfMatchSelector" class="pdf-match-select" aria-label="Jump to discrepancy"></select>
+            <button id="pdfNext" class="pdf-step-arrow" aria-label="Next finding" title="Next finding (→)">▶</button>
+          </div>
+          <span id="pdfPosition" class="pdf-pos">— / —</span>
         </div>
         <div class="pdf-reviewer-nav">
           <div class="pdf-zoom">
@@ -265,9 +270,7 @@
             <button id="pdfZoomIn" class="btn ghost btn-sm" title="Zoom in">+</button>
             <button id="pdfZoomReset" class="btn ghost btn-sm" title="Fit">Fit</button>
           </div>
-          <button id="pdfPrev" class="btn ghost btn-sm">← Prev</button>
-          <span id="pdfPosition" class="pdf-pos">— / —</span>
-          <button id="pdfNext" class="btn ghost btn-sm">Next →</button>
+          <button id="toggleHighlight" class="btn ghost btn-sm" title="Toggle the red highlight (H)">👁 Hide highlight</button>
           <button id="pdfReviewerClose" class="btn ghost btn-sm">✕ Close</button>
         </div>
       </div>
@@ -275,7 +278,7 @@
         <div class="pdf-reviewer-side pdf-reviewer-apple">
           <div class="pdf-reviewer-side-label">
             <span>🍎 APPLE · ARGUS</span>
-            <button class="side-focus-btn" data-focus="apple" title="Expand this side">⛶ Expand</button>
+            <button class="side-focus-btn" data-focus="apple" title="Expand this side fullscreen">⛶</button>
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
         </div>
@@ -286,7 +289,7 @@
               <label class="pvt-opt active"><input type="radio" name="pearView" value="original" checked><span>Original</span></label>
               <label class="pvt-opt"><input type="radio" name="pearView" value="as-apple"><span>🍎 As Apple</span></label>
             </div>
-            <button class="side-focus-btn" data-focus="pear" title="Expand this side">⛶ Expand</button>
+            <button class="side-focus-btn" data-focus="pear" title="Expand this side fullscreen">⛶</button>
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevClient"></div>
         </div>

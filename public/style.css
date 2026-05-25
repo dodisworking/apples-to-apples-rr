@@ -464,12 +464,29 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   display: flex; align-items: center; gap: 12px;
   font-size: 16px; font-weight: 700; color: #111827;
 }
+.pdf-finding-select-wrap {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid #e5e7eb; border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+}
+.pdf-step-arrow {
+  border: 0; background: transparent;
+  padding: 0 10px; cursor: pointer;
+  font-size: 12px; color: #374151;
+  font-family: inherit;
+}
+.pdf-step-arrow:hover { background: #fee2e2; color: #dc2626; }
+.pdf-step-arrow:disabled { opacity: .3; cursor: not-allowed; background: transparent; }
 .pdf-match-select {
   font: inherit; font-size: 13px;
-  border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px;
+  border: 0; border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+  padding: 6px 10px;
   background: #fff; color: #111827;
   max-width: 480px;
+  outline: none;
 }
+.pdf-match-select:focus { background: #fef2f2; }
 .pdf-reviewer-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pdf-pos { font-size: 12px; color: #6b7280; min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; }
 .pdf-zoom {
@@ -513,25 +530,28 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 }
 .pdf-reviewer-pear .pdf-reviewer-side-label { background: #f0fdf4; color: #065f46; }
 .side-focus-btn {
-  font-family: inherit; font-size: 10px; font-weight: 700;
-  letter-spacing: .04em;
-  background: rgba(255,255,255,.7); color: #374151;
-  border: 1px solid currentColor; border-radius: 999px;
-  padding: 3px 10px; cursor: pointer; opacity: .85;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  background: rgba(255,255,255,.85); color: #374151;
+  border: 1px solid rgba(0,0,0,.12); border-radius: 8px;
+  width: 30px; height: 30px;
+  padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all .15s ease;
 }
-.side-focus-btn:hover { opacity: 1; background: #fff; }
+.side-focus-btn:hover { background: #fff; border-color: rgba(0,0,0,.25); transform: scale(1.05); }
 .pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn,
 .pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn {
   background: #dc2626; color: #fff; border-color: #dc2626;
 }
-.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn::before,
-.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn::before {
-  content: '✕ ';
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn::after,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn::after {
+  /* When focused, swap glyph: replace ⛶ with ✕ via overlay */
+  content: '✕';
+  position: absolute;
+  background: inherit; color: inherit;
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
 }
-.pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn,
-.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn {
-  /* Hide the original glyph text — pseudo provides the close icon */
-}
+.side-focus-btn { position: relative; overflow: hidden; }
 .pear-view-toggle {
   display: inline-flex; gap: 2px;
   background: rgba(255,255,255,.7); border: 1px solid #bbf7d0; border-radius: 999px;
@@ -553,15 +573,24 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   background: #f9fafb;
 }
 .pdf-reviewer-canvas canvas { display: block; max-width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+/* Soft highlighter — no hard outline, no dim scrim. Like a yellow marker on paper. */
 .pdf-reviewer-canvas .hl-rect {
   position: absolute;
-  border: 3px solid #dc2626;
-  background: rgba(220, 38, 38, .22);
-  border-radius: 3px;
+  background: rgba(252, 211, 77, 0.42);   /* warm yellow translucent */
+  mix-blend-mode: multiply;
+  border-radius: 2px;
   pointer-events: none;
-  animation: hl-pulse 1.6s ease-in-out infinite;
-  box-shadow: 0 0 0 9999px rgba(15, 23, 42, .12);
+  transition: opacity .2s ease;
 }
+.pdf-reviewer-canvas .hl-rect.urgent { background: rgba(248, 113, 113, 0.42); }   /* HIGH severity → soft red wash */
+.pdf-reviewer-canvas .hl-rect.warn   { background: rgba(251, 146, 60, 0.40); }   /* MEDIUM → soft orange */
+/* Hide-highlight toggle */
+body.no-highlight .pdf-reviewer-canvas .hl-rect { opacity: 0; }
+body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block td { background: inherit !important; box-shadow: none !important; }
+body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-start td { border-top: 1px solid #e5e7eb !important; }
+body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-end td   { border-bottom: 1px solid #e5e7eb !important; }
+body.no-highlight .pdf-reviewer-canvas .xlsx-table td.xlsx-active-cell { background: inherit !important; outline: none !important; }
+body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { background: #fff !important; outline: none !important; font-weight: 600; }
 /* XLSX sheet rendered with per-cell styles extracted server-side.
    Goal: looks like opening the workbook in Excel. */
 .pdf-reviewer-canvas .xlsx-sheet {
@@ -901,8 +930,9 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   animation: hl-pulse 1.6s ease-in-out infinite;
 }
 @keyframes hl-pulse {
-  0%, 100% { border-color: #dc2626; background: rgba(220,38,38,.15); }
-  50%      { border-color: #f87171; background: rgba(220,38,38,.28); }
+  /* unused now; left in case other styles still reference it */
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .75; }
 }
 .preview-placeholder { padding: 20px; font-size: 12px; color: #6b7280; text-align: center; }
 .preview-xlsx-row { margin: 8px; width: calc(100% - 16px); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }

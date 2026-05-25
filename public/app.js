@@ -834,6 +834,21 @@ $('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
 $('#pdfNext').addEventListener('click', () => stepReviewer(+1))
 $('#pdfMatchSelector').addEventListener('change', (e) => openPdfReviewer(parseInt(e.target.value, 10)))
 
+// 👁 Hide/show highlight overlay
+state.highlightHidden = false
+document.getElementById('toggleHighlight')?.addEventListener('click', () => {
+  state.highlightHidden = !state.highlightHidden
+  document.body.classList.toggle('no-highlight', state.highlightHidden)
+  const btn = document.getElementById('toggleHighlight')
+  if (btn) btn.textContent = state.highlightHidden ? '👁 Show highlight' : '👁 Hide highlight'
+})
+// Keyboard shortcut H toggles highlight while reviewer is open
+document.addEventListener('keydown', (e) => {
+  if ($('#pdfReviewer').getAttribute('aria-hidden') !== 'false') return
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+  if (e.key === 'h' || e.key === 'H') document.getElementById('toggleHighlight')?.click()
+})
+
 // Side-focus — click "⛶ Expand" on either side to maximize it; click again to restore 50/50
 state.focusSide = null
 document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
@@ -1005,7 +1020,7 @@ async function renderReviewerSide(side, host, match, tenants) {
     host.style.position = 'relative'
     host.appendChild(canvas)
     const rect = document.createElement('div')
-    rect.className = 'hl-rect'
+    rect.className = 'hl-rect ' + severityClass(match)
     rect.style.left = (canvas.offsetLeft + loc.rect.x * scale) + 'px'
     rect.style.top  = (canvas.offsetTop  + loc.rect.y * scale) + 'px'
     rect.style.width  = (loc.rect.w * scale) + 'px'
@@ -1473,13 +1488,21 @@ async function renderSide(side, host, match, tenants) {
   host.appendChild(canvas)
 
   const rect = document.createElement('div')
-  rect.className = 'hl-rect'
+  rect.className = 'hl-rect ' + severityClass(match)
   rect.style.left   = (canvas.offsetLeft + loc.rect.x * scale) + 'px'
   rect.style.top    = (canvas.offsetTop  + loc.rect.y * scale) + 'px'
   rect.style.width  = (loc.rect.w * scale) + 'px'
   rect.style.height = (loc.rect.h * scale) + 'px'
   host.appendChild(rect)
   host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 40)
+}
+
+// Pick a severity-color class for the highlighter based on the worst diff in the match.
+function severityClass(match) {
+  const diffs = match?.diffs || []
+  if (diffs.some(d => d.severity === 'HIGH') || match?.flags?.argusOnly || match?.flags?.clientOnly) return 'urgent'
+  if (diffs.some(d => d.severity === 'MEDIUM')) return 'warn'
+  return ''  // default yellow highlighter
 }
 
 function renderXlsxRow(host, tenant, match) {
