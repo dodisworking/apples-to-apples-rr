@@ -527,31 +527,49 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .pdf-reviewer-pear .pdf-reviewer-side-label,
 .pdf-reviewer-apple .pdf-reviewer-side-label {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  cursor: pointer;            /* whole header bar is clickable to expand */
+  user-select: none;
+  transition: background .15s ease, box-shadow .15s ease;
 }
 .pdf-reviewer-pear .pdf-reviewer-side-label { background: #f0fdf4; color: #065f46; }
-.side-focus-btn {
-  font-family: inherit; font-size: 14px; font-weight: 700;
+.pdf-reviewer-apple .pdf-reviewer-side-label:hover { background: #fee2e2; box-shadow: 0 0 0 2px #dc2626 inset; }
+.pdf-reviewer-pear .pdf-reviewer-side-label:hover  { background: #dcfce7; box-shadow: 0 0 0 2px #16a34a inset; }
+.side-label-text { flex: 1; }
+.side-label-actions { display: flex; align-items: center; gap: 8px; }
+.side-action-btn {
+  font-family: inherit; font-size: 11px; font-weight: 600;
   background: rgba(255,255,255,.85); color: #374151;
-  border: 1px solid rgba(0,0,0,.12); border-radius: 8px;
-  width: 30px; height: 30px;
+  border: 1px solid rgba(0,0,0,.12); border-radius: 999px;
+  padding: 4px 10px; cursor: pointer;
+  transition: all .15s ease;
+}
+.side-action-btn:hover { background: #fff; border-color: rgba(0,0,0,.25); }
+.side-focus-btn {
+  font-family: inherit; font-size: 16px; font-weight: 800;
+  background: #dc2626; color: #fff;
+  border: 1px solid #dc2626; border-radius: 8px;
+  width: 36px; height: 30px;
   padding: 0; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   transition: all .15s ease;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, .25);
 }
-.side-focus-btn:hover { background: #fff; border-color: rgba(0,0,0,.25); transform: scale(1.05); }
+.pdf-reviewer-pear .side-focus-btn { background: #16a34a; border-color: #16a34a; box-shadow: 0 2px 6px rgba(22, 163, 74, .25); }
+.side-focus-btn:hover { transform: scale(1.06); box-shadow: 0 4px 10px rgba(0,0,0,.18); }
+.side-focus-btn { position: relative; }
 .pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn,
 .pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn {
-  background: #dc2626; color: #fff; border-color: #dc2626;
+  background: #111827; border-color: #111827; color: #fff;
 }
 .pdf-reviewer-body.focus-apple .pdf-reviewer-apple .side-focus-btn::after,
 .pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .side-focus-btn::after {
-  /* When focused, swap glyph: replace ⛶ with ✕ via overlay */
   content: '✕';
-  position: absolute;
-  background: inherit; color: inherit;
-  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #111827; color: #fff;
+  border-radius: inherit;
+  font-size: 16px;
 }
-.side-focus-btn { position: relative; overflow: hidden; }
 .pear-view-toggle {
   display: inline-flex; gap: 2px;
   background: rgba(255,255,255,.7); border: 1px solid #bbf7d0; border-radius: 999px;

@@ -276,20 +276,26 @@
       </div>
       <div class="pdf-reviewer-body" id="pdfReviewerBody">
         <div class="pdf-reviewer-side pdf-reviewer-apple">
-          <div class="pdf-reviewer-side-label">
-            <span>🍎 APPLE · ARGUS</span>
-            <button class="side-focus-btn" data-focus="apple" title="Expand this side fullscreen">⛶</button>
+          <div class="pdf-reviewer-side-label" data-focus="apple" title="Click to expand fullscreen (or press 1)">
+            <span class="side-label-text">🍎 APPLE · ARGUS</span>
+            <div class="side-label-actions">
+              <button class="side-action-btn" data-open-original="argus" title="Open original Argus file in a new tab">📥 Open file</button>
+              <button class="side-focus-btn" data-focus="apple" title="Fullscreen this side (1)" aria-label="Fullscreen Apple">⛶</button>
+            </div>
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevArgus"></div>
         </div>
         <div class="pdf-reviewer-side pdf-reviewer-pear">
-          <div class="pdf-reviewer-side-label">
-            <span>🍐 PEAR · CLIENT</span>
-            <div class="pear-view-toggle" role="radiogroup">
-              <label class="pvt-opt active"><input type="radio" name="pearView" value="original" checked><span>Original</span></label>
-              <label class="pvt-opt"><input type="radio" name="pearView" value="as-apple"><span>🍎 As Apple</span></label>
+          <div class="pdf-reviewer-side-label" data-focus="pear" title="Click to expand fullscreen (or press 2)">
+            <span class="side-label-text">🍐 PEAR · CLIENT</span>
+            <div class="side-label-actions">
+              <div class="pear-view-toggle" role="radiogroup">
+                <label class="pvt-opt active"><input type="radio" name="pearView" value="original" checked><span>Original</span></label>
+                <label class="pvt-opt"><input type="radio" name="pearView" value="as-apple"><span>🍎 As Apple</span></label>
+              </div>
+              <button class="side-action-btn" data-open-original="client" title="Open original client file in a new tab">📥 Open file</button>
+              <button class="side-focus-btn" data-focus="pear" title="Fullscreen this side (2)" aria-label="Fullscreen Pear">⛶</button>
             </div>
-            <button class="side-focus-btn" data-focus="pear" title="Expand this side fullscreen">⛶</button>
           </div>
           <div class="pdf-reviewer-canvas" id="pdfRevClient"></div>
         </div>

@@ -849,30 +849,54 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') document.getElementById('toggleHighlight')?.click()
 })
 
-// Side-focus — click "⛶ Expand" on either side to maximize it; click again to restore 50/50
+// Side-focus — clicking ANYWHERE on the side header bar (or the ⛶ button, or
+// pressing 1/2 on the keyboard) toggles fullscreen for that side. The whole
+// label bar is interactive so it's hard to miss.
 state.focusSide = null
-document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.side-focus-btn')
-  if (!btn) return
-  const which = btn.dataset.focus
+
+function setFocusSide(which) {
   const body = document.getElementById('pdfReviewerBody')
-  if (state.focusSide === which) {
-    state.focusSide = null
-    body.classList.remove('focus-apple', 'focus-pear')
-    btn.textContent = '⛶ Expand'
-  } else {
-    state.focusSide = which
-    body.classList.remove('focus-apple', 'focus-pear')
-    body.classList.add('focus-' + which)
-    // Reset all expand buttons, then mark the active one as "Restore"
-    document.querySelectorAll('.side-focus-btn').forEach(b => { b.textContent = b.dataset.focus === which ? '✕ Close fullscreen' : '⛶ Expand' })
-  }
-  // Re-render the visible side(s) so canvas/table picks up the new width.
+  if (!body) return
+  if (state.focusSide === which) which = null   // toggle off
+  state.focusSide = which
+  body.classList.remove('focus-apple', 'focus-pear')
+  if (which) body.classList.add('focus-' + which)
+  // Re-render visible sides so canvas/table pick up the new width
   if (state.activeIdx >= 0) {
     const m = state.result.matches[state.activeIdx]
     if (state.focusSide !== 'pear')  renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
     if (state.focusSide !== 'apple') renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
   }
+}
+
+document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
+  // 📥 Open original file in a new tab
+  const openBtn = e.target.closest('[data-open-original]')
+  if (openBtn) {
+    e.stopPropagation()
+    const which = openBtn.dataset.openOriginal
+    const file = which === 'argus' ? state.argusFile : state.clientFile
+    if (!file) { alert('Original file not available — re-upload to enable.'); return }
+    const url = URL.createObjectURL(file)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    return
+  }
+  // Side focus — works from the ⛶ button OR clicking anywhere on the label bar
+  const labelOrBtn = e.target.closest('[data-focus]')
+  if (!labelOrBtn) return
+  // Don't trigger when the click was inside the pear-view-toggle (which has its own behavior)
+  if (e.target.closest('.pear-view-toggle')) return
+  setFocusSide(labelOrBtn.dataset.focus)
+})
+
+// Keyboard shortcuts: 1 = Apple fullscreen, 2 = Pear fullscreen, 0 = split
+document.addEventListener('keydown', (e) => {
+  if ($('#pdfReviewer').getAttribute('aria-hidden') !== 'false') return
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
+  if (e.key === '1') { e.preventDefault(); setFocusSide('apple') }
+  else if (e.key === '2') { e.preventDefault(); setFocusSide('pear') }
+  else if (e.key === '0') { e.preventDefault(); setFocusSide(null) }
 })
 
 // Zoom controls — multiply both PDF and XLSX renders by this factor
