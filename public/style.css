@@ -157,36 +157,60 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 }
 .swap-btn:hover { background: #fef2f2; border-color: #dc2626; }
 
-/* ─── Process stage (apple → pear → apple transform) ───── */
-.kitchen {
-  background:
-    repeating-linear-gradient(0deg, #fef3c7 0 32px, #fde68a 32px 33px, #fef3c7 33px 64px),
-    linear-gradient(180deg, #fef3c7 0%, #fbbf24 100%);
-  border-radius: 22px;
-  padding: 48px 24px;
-  margin-bottom: 24px;
-  box-shadow: inset 0 0 30px rgba(180, 83, 9, .12);
-}
-.transform-row {
+/* ─── Process stage: single 32-bit pear → apple morph ───── */
+.morph-stage {
   display: flex; align-items: center; justify-content: center;
-  gap: 40px;
+  padding: 36px 16px;
+  margin-bottom: 20px;
 }
-.big-fruit svg { width: 96px; height: 96px; image-rendering: pixelated; }
-.big-fruit { animation: float 1.6s ease-in-out infinite; }
-@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.arrow {
-  font-size: 48px; color: #dc2626; font-weight: 800;
-  animation: arrow-pulse 0.8s ease-in-out infinite;
+.morph-fruit {
+  position: relative;
+  width: 144px; height: 144px;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.12));
 }
-@keyframes arrow-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50%      { transform: scale(1.15); opacity: 1; }
+.morph-pear, .morph-apple {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  animation: float 2.4s ease-in-out infinite;
 }
-.morph svg { transition: filter .4s ease; }
-.morph.stage-1 svg { filter: hue-rotate(-30deg) saturate(1.2); }
-.morph.stage-2 svg { filter: hue-rotate(-60deg) saturate(1.4); }
-.morph.stage-3 svg { filter: hue-rotate(-90deg) saturate(1.5); }
-.morph.stage-done svg { filter: hue-rotate(-120deg) saturate(1.6) brightness(0.95); }
+.morph-pear  { animation-name: float, morph-pear-out; }
+.morph-apple { animation-name: float, morph-apple-in; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+/* 2.4s loop: pear holds for 35% of the cycle, morphs out for 15%,
+   apple morphs in for 15%, holds for 35%. Soft scale + opacity crossfade
+   reads as 'pear becoming an apple'. */
+@keyframes morph-pear-out {
+  0%, 35%  { opacity: 1; transform: scale(1) translateY(0); }
+  50%      { opacity: 0; transform: scale(0.6) translateY(0); }
+  85%      { opacity: 0; transform: scale(0.6) translateY(0); }
+  100%     { opacity: 1; transform: scale(1)   translateY(0); }
+}
+@keyframes morph-apple-in {
+  0%, 35%  { opacity: 0; transform: scale(0.6) translateY(0); }
+  50%      { opacity: 0; transform: scale(0.6) translateY(0); }
+  65%      { opacity: 1; transform: scale(1)   translateY(0); }
+  85%      { opacity: 1; transform: scale(1)   translateY(0); }
+  100%     { opacity: 0; transform: scale(0.6) translateY(0); }
+}
+/* Floating sparkles around the morph */
+.morph-fruit .sparkle {
+  position: absolute;
+  color: #f59e0b;
+  font-size: 18px;
+  opacity: 0;
+  animation: sparkle 2.4s ease-in-out infinite;
+}
+.morph-fruit .sparkle.s1 { top: 4px;  left: -8px; animation-delay: 0s;   }
+.morph-fruit .sparkle.s2 { top: -4px; right: 10px; animation-delay: 0.8s; }
+.morph-fruit .sparkle.s3 { bottom: 6px; right: -8px; animation-delay: 1.6s; }
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.5); }
+  50%      { opacity: 1; transform: scale(1)  ; }
+}
 
 /* ─── Progress ─────────────────────────────────────────── */
 .progress-shell { max-width: 680px; margin: 0 auto; }
@@ -507,13 +531,21 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   padding: 6px;
   transition: grid-template-columns .2s ease;
 }
-/* Fullscreen modes (button or keyboard 1/2). Divider hidden, only one side. */
-.pdf-reviewer-body.focus-apple { grid-template-columns: 1fr 0 0; }
-.pdf-reviewer-body.focus-pear  { grid-template-columns: 0 0 1fr; }
+/* Fullscreen for one side — bulletproof override of the grid via absolute.
+   The focused side takes over the whole reviewer body; the other side and
+   the divider are hidden. Works regardless of grid track widths. */
+.pdf-reviewer-body { position: relative; }
 .pdf-reviewer-body.focus-apple .pdf-reviewer-pear,
-.pdf-reviewer-body.focus-apple .pdf-reviewer-divider,
 .pdf-reviewer-body.focus-pear  .pdf-reviewer-apple,
-.pdf-reviewer-body.focus-pear  .pdf-reviewer-divider { display: none; }
+.pdf-reviewer-body.focus-apple .pdf-reviewer-divider,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-divider { display: none !important; }
+.pdf-reviewer-body.focus-apple .pdf-reviewer-apple,
+.pdf-reviewer-body.focus-pear  .pdf-reviewer-pear {
+  position: absolute !important;
+  inset: 6px !important;
+  width: auto !important; height: auto !important;
+  z-index: 2;
+}
 
 /* Drag-resizable divider between the two sides */
 .pdf-reviewer-divider {
@@ -572,6 +604,27 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   transition: all .15s ease;
 }
 .side-action-btn:hover { background: #fff; border-color: rgba(0,0,0,.25); }
+
+/* Per-side zoom — small +/−/fit pill controls embedded in the side label */
+.side-zoom {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: rgba(255,255,255,.85); border: 1px solid rgba(0,0,0,.12);
+  border-radius: 999px; padding: 2px;
+}
+.side-zoom-btn {
+  font-family: inherit; font-size: 13px; font-weight: 700;
+  background: transparent; color: #374151;
+  border: 0; border-radius: 999px;
+  width: 26px; height: 22px;
+  padding: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.side-zoom-btn:hover { background: rgba(0,0,0,.07); }
+.side-zoom-label {
+  font-size: 10px; font-weight: 700; color: #6b7280;
+  min-width: 34px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .side-focus-btn {
   font-family: inherit; font-size: 16px; font-weight: 800;
   background: #dc2626; color: #fff;

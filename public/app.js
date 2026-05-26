@@ -905,8 +905,36 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '0') { e.preventDefault(); setFocusSide(null) }
 })
 
-// Zoom controls — multiply both PDF and XLSX renders by this factor
-state.pdfZoom = 1.0   // 1.0 = fit (PDF default 1.7x baseline; XLSX default 1.0x)
+// Per-side zoom — independent argus and client zoom factors
+state.zoomArgus  = 1.0
+state.zoomClient = 1.0
+
+function setSideZoom(side, mult) {
+  const key = side === 'argus' ? 'zoomArgus' : 'zoomClient'
+  if (mult === 'fit') state[key] = 1.0
+  else state[key] = Math.max(0.4, Math.min(4.0, state[key] * mult))
+  const lbl = document.querySelector(`[data-zoom-label="${side === 'argus' ? 'argus' : 'client'}"]`)
+  if (lbl) lbl.textContent = Math.round(state[key] * 100) + '%'
+  if (state.activeIdx >= 0) {
+    const m = state.result.matches[state.activeIdx]
+    const which = side === 'argus' ? 'argus' : 'client'
+    const host = document.getElementById(which === 'argus' ? 'pdfRevArgus' : 'pdfRevClient')
+    renderReviewerSide(which, host, m, which === 'argus' ? state.result.argusTenants : state.result.clientTenants)
+  }
+}
+
+// Wire per-side +/−/fit buttons (delegated on the reviewer body)
+document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-side-zoom]')
+  if (!btn) return
+  e.stopPropagation()
+  const side = btn.dataset.sideZoom   // 'argus' | 'client'
+  const dir = btn.dataset.dir          // 'in' | 'out' | 'fit'
+  setSideZoom(side, dir === 'in' ? 1.25 : dir === 'out' ? 0.8 : 'fit')
+})
+
+// Global zoom kept for back-compat with the existing pdfZoom references
+state.pdfZoom = 1.0   // 1.0 = fit baseline
 $('#pdfZoomIn')   .addEventListener('click', () => setPdfZoom(Math.min(3.5, state.pdfZoom * 1.25)))
 $('#pdfZoomOut')  .addEventListener('click', () => setPdfZoom(Math.max(0.5, state.pdfZoom / 1.25)))
 $('#pdfZoomReset').addEventListener('click', () => setPdfZoom(1.0))
@@ -1110,7 +1138,8 @@ async function renderReviewerSide(side, host, match, tenants) {
     const containerW = host.clientWidth || 600
     const hostWidth = Math.max(200, containerW - 24)   // 24 = padding
     const fitScale = hostWidth / baseVp.width
-    const scale = fitScale * (state.pdfZoom || 1.0)
+    const sideZoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
+    const scale = fitScale * sideZoom
     const vp = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
     canvas.width = vp.width; canvas.height = vp.height
@@ -1175,7 +1204,8 @@ function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
   const colCount = Math.max(...rows.map(r => r.length))
 
   // colgroup for column widths (Excel char-width → pixels approx)
-  const zoom = state.pdfZoom || 1.0
+  // Per-side zoom: argus uses zoomArgus, client uses zoomClient
+  const zoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
   let html = `<div class="xlsx-sheet" style="font-size:${Math.round(11 * zoom)}px"><table class="xlsx-table"><colgroup>`
   html += '<col class="xlsx-col-rownum">'
   for (let c = 0; c < colCount; c++) {
