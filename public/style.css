@@ -672,17 +672,30 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
   background: #f9fafb;
 }
 .pdf-reviewer-canvas canvas { display: block; max-width: 100%; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-/* Soft highlighter — no hard outline, no dim scrim. Like a yellow marker on paper. */
+/* Highlight rectangle: solid red outline + translucent fill + pulsing animation
+   so the active finding is unmistakable on the PDF/XLSX preview. */
 .pdf-reviewer-canvas .hl-rect {
   position: absolute;
-  background: rgba(252, 211, 77, 0.42);   /* warm yellow translucent */
-  mix-blend-mode: multiply;
-  border-radius: 2px;
+  background: rgba(252, 211, 77, 0.35);   /* warm yellow translucent */
+  border: 2px solid #ca8a04;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 4px 12px -4px rgba(0,0,0,.3);
   pointer-events: none;
   transition: opacity .2s ease;
+  animation: hl-rect-pulse 1.6s ease-in-out infinite;
 }
-.pdf-reviewer-canvas .hl-rect.urgent { background: rgba(248, 113, 113, 0.42); }   /* HIGH severity → soft red wash */
-.pdf-reviewer-canvas .hl-rect.warn   { background: rgba(251, 146, 60, 0.40); }   /* MEDIUM → soft orange */
+.pdf-reviewer-canvas .hl-rect.urgent {
+  background: rgba(248, 113, 113, 0.32);
+  border-color: #dc2626;
+}
+.pdf-reviewer-canvas .hl-rect.warn {
+  background: rgba(251, 146, 60, 0.32);
+  border-color: #ea580c;
+}
+@keyframes hl-rect-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.6), 0 4px 12px -4px rgba(0,0,0,.3); }
+  50%      { box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 6px 18px -4px rgba(220,38,38,.5); }
+}
 /* Hide-highlight toggle */
 body.no-highlight .pdf-reviewer-canvas .hl-rect { opacity: 0; }
 body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block td { background: inherit !important; box-shadow: none !important; }

@@ -1286,7 +1286,7 @@ async function renderReviewerSide(side, host, match, tenants) {
   try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
 
   if (entry?.type === 'pdf') {
-    const loc = await locateInPdf(entry, tenant, { targetValue })
+    const loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey })
     if (!loc) {
       host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
       return
@@ -1681,9 +1681,66 @@ async function loadPdfDoc(side) {
 //
 // This makes the red rectangle point at the exact cell that caused the discrepancy,
 // not just the whole tenant row.
+// For each finding field, a list of keyword regexes that identify the column
+// header in the source PDF. When the literal target value can't be found in
+// the tenant row (e.g. client value differs from what's printed), we fall
+// back to (anchor.y, header.x) — a cell-aligned box on the right COLUMN.
+const PDF_FIELD_HEADER_RE = {
+  tenant_name:         [/^tenant$/i, /^name$/i],
+  suite:               [/^suite/i, /^unit$/i, /^space/i],
+  sqft:                [/sq\.?\s*ft/i, /square\s*feet/i, /^area$/i, /^sf$/i, /rentable/i],
+  lease_start:         [/lease\s*start/i, /commence/i, /^start/i, /begin/i],
+  lease_end:           [/exp\.?\s*date/i, /expir/i, /lease\s*end/i, /^end/i, /termination/i],
+  base_rent_psf:       [/rent\s*per\s*sq/i, /\$\/sf/i, /per\s*sf/i, /^psf$/i, /^rate$/i, /per\s*square/i],
+  base_rent_annual:    [/annual\s*rent/i, /^annual$/i, /\/yr/i, /yearly/i],
+  rent_steps_count:    [/escalat/i, /step/i, /increase/i, /bump/i],
+  rent_step_date:      [/escalat/i, /step.*date/i, /increase.*date/i],
+  rent_step_amount:    [/escalat/i, /step.*amount/i, /increase.*amount/i, /new\s*rent/i],
+  free_rent_count:     [/free\s*rent/i, /abate/i, /concession/i],
+  free_rent:           [/free\s*rent/i, /abate/i, /concession/i],
+  pct_rent_breakpoint: [/breakpoint/i, /sales\s*volume/i, /natural\s*bp/i],
+  pct_rent_overage:    [/overage/i, /percent.*rent/i, /^%\s*rent/i],
+}
+
+// Scan the page text for column headers. Headers tend to live in the top 40%
+// of the page (above the first data row) and are short. Returns a list of
+// {x, y, w, h, str} for items that look like headers, plus the anchor Y so
+// callers can filter "above the data" candidates.
+function detectColumnHeaders(tc, viewport) {
+  const items = []
+  const yMax = viewport.height * 0.45   // headers in top ~45%
+  for (const item of tc.items) {
+    const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
+    const top = tr[5] - item.height
+    if (top > yMax) continue
+    const s = String(item.str).trim()
+    if (!s || s.length > 30) continue
+    items.push({ x: tr[4], y: top, w: item.width, h: item.height, str: s })
+  }
+  return items
+}
+
+// Given a fieldKey and the list of header items detected on the page, find
+// the X-center of the column for that field. Returns null if no header
+// keyword matched. Picks the BOTTOM-MOST matching header (closest to data).
+function findColumnX(fieldKey, headers) {
+  const res = PDF_FIELD_HEADER_RE[fieldKey]
+  if (!res || !res.length) return null
+  let best = null
+  for (const h of headers) {
+    if (!res.some(re => re.test(h.str))) continue
+    // Prefer the bottom-most matching header (closer to data, less likely
+    // to be a section title higher up).
+    if (!best || h.y > best.y) best = h
+  }
+  if (!best) return null
+  return { x: best.x, w: best.w, xCenter: best.x + best.w / 2 }
+}
+
 async function locateInPdf(entry, tenant, opts = {}) {
   if (entry.type !== 'pdf' || !tenant) return null
   const targetValue = opts.targetValue || null
+  const fieldKey = opts.fieldKey || null
 
   const suiteStr = tenant.suite ? String(tenant.suite).replace(/[^a-z0-9]/gi, '') : ''
   const suiteRe = suiteStr ? new RegExp(`(^|\\s|#)0*${escapeRe(suiteStr)}\\b`, 'i') : null
@@ -1770,6 +1827,29 @@ async function locateInPdf(entry, tenant, opts = {}) {
         const hit = valueHits[0]
         const box = { x: hit.x - 3, y: hit.y - 2, w: hit.w + 6, h: hit.h + 4 }
         return { page: p, rect: box, precision: 'value' }
+      }
+    }
+
+    // Phase 2.5: column-header-aware fallback.
+    // The value text wasn't found in this tenant's row — common when the
+    // normalized value differs from what's printed ("19,000 SF" vs raw
+    // "9,000", or "$30.00/SF/yr" vs PDF "30.00"). Scan the page for the
+    // expected column header (Area, Annual, Exp. Date, etc.) and draw a
+    // box at (anchor.y, header.x) — same row, right column.
+    if (fieldKey) {
+      const headers = detectColumnHeaders(tc, viewport)
+      const col = findColumnX(fieldKey, headers)
+      if (col) {
+        // Cell box sits at the column's X, the anchor's Y, sized to roughly
+        // a single cell width (header.w + a little padding for value overflow).
+        const cellW = Math.max(col.w + 30, 60)
+        const box = {
+          x: Math.max(0, col.x - 6),
+          y: anchor.y - 3,
+          w: Math.min(viewport.width - Math.max(0, col.x - 6), cellW),
+          h: anchor.h + 6,
+        }
+        return { page: p, rect: box, precision: 'column' }
       }
     }
 
