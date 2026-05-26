@@ -1271,8 +1271,16 @@ function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
       // mark it with a red outline + pulse — the precise red box on the cell.
       let cellHit = ''
       if (valueNeedles.length && isInBlock && raw != null && raw !== '') {
-        const cellText = String(raw)
-        if (valueNeedles.some(n => cellText.includes(n))) cellHit = ' xlsx-cell-hit'
+        // Check BOTH the raw value AND the formatted display text — Excel
+        // stores 30.5 as a number, but the finding's needle is "30.50".
+        const rawStr = String(raw)
+        const dispStr = String(text)
+        const rawStripped = rawStr.replace(/[$,\s]/g, '')
+        const dispStripped = dispStr.replace(/[$,\s]/g, '')
+        if (valueNeedles.some(n =>
+          rawStr.includes(n) || dispStr.includes(n) ||
+          rawStripped.includes(n) || dispStripped.includes(n)
+        )) cellHit = ' xlsx-cell-hit'
       }
       html += `<td${mergeAttr} class="${cellHit.trim()}"${css ? ` style="${css}"` : ''}>${escape(text)}</td>`
     }
@@ -1602,26 +1610,69 @@ async function locateInPdf(entry, tenant, opts = {}) {
 }
 
 // Build a list of substrings to search for given a finding's value string.
-// Handles things like "$503,274" → ["503,274", "503274", "503274.00"], etc.
+// Handles currency ("$503,274" → ["503,274", "503274", "503274.00"]),
+// dates ("12/31/2025" → ["12/31/25", "12-31-2025", "Dec 31, 2025", ...]),
+// and PSF/unit suffixes.
 function buildValueNeedles(v) {
   if (v == null || v === '' || v === '—') return []
   const s = String(v).trim()
   const out = new Set([s])
-  // Strip $ and currency formatting
+
+  // ---------- Date variants ----------
+  // Try to detect a date in common formats and emit alternates.
+  const dateVariants = buildDateVariants(s)
+  for (const d of dateVariants) out.add(d)
+
+  // ---------- Currency / number variants ----------
   const stripped = s.replace(/[$,]/g, '').replace(/\s+/g, '')
   if (stripped) out.add(stripped)
-  // Remove "/SF/yr", "/SF/mo", "/yr", "/mo" suffixes
   const noUnit = stripped.replace(/\/?(SF\/yr|SF\/mo|yr|mo|sf|psf|annual|monthly)$/i, '')
   if (noUnit && noUnit !== stripped) out.add(noUnit)
-  // Number without decimal (e.g. "503274" from "503,274.00")
-  const num = parseFloat(stripped)
-  if (isFinite(num)) {
+  const num = parseFloat(noUnit || stripped)
+  if (isFinite(num) && !dateVariants.length) {
     out.add(String(Math.round(num)))
     out.add(num.toFixed(2))
     out.add(num.toLocaleString('en-US'))
     out.add(num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
-  return Array.from(out).filter(x => x && x.length >= 2)
+
+  // Drop very short needles to avoid false positives ("00", "20" etc).
+  return Array.from(out).filter(x => x && x.length >= 3)
+}
+
+// Parse a date-like string and return alternate textual representations
+// covering the formats commonly found in rent rolls.
+function buildDateVariants(s) {
+  const variants = []
+  // Match MM/DD/YYYY, M/D/YY, MM-DD-YYYY, YYYY-MM-DD, "Jan 5, 2025", "5-Jan-25"
+  const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const monthsShort = monthsLong.map(m => m.slice(0, 3))
+  let y, m, d
+  let mt
+  if ((mt = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/))) {
+    m = +mt[1]; d = +mt[2]; y = +mt[3]
+    if (y < 100) y += y < 50 ? 2000 : 1900
+  } else if ((mt = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) {
+    y = +mt[1]; m = +mt[2]; d = +mt[3]
+  } else if ((mt = s.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{1,2}),?\s+(\d{2,4})$/i))) {
+    m = monthsShort.findIndex(x => x.toLowerCase() === mt[1].slice(0, 3).toLowerCase()) + 1
+    d = +mt[2]; y = +mt[3]
+    if (y < 100) y += y < 50 ? 2000 : 1900
+  } else {
+    return variants
+  }
+  if (!m || !d || !y || m < 1 || m > 12 || d < 1 || d > 31) return variants
+  const mm = String(m).padStart(2, '0'), dd = String(d).padStart(2, '0')
+  const yy = String(y).slice(-2), yyyy = String(y)
+  const mLong = monthsLong[m - 1], mShort = monthsShort[m - 1]
+  variants.push(`${m}/${d}/${yyyy}`, `${mm}/${dd}/${yyyy}`)
+  variants.push(`${m}/${d}/${yy}`, `${mm}/${dd}/${yy}`)
+  variants.push(`${m}-${d}-${yyyy}`, `${mm}-${dd}-${yyyy}`)
+  variants.push(`${m}-${d}-${yy}`, `${mm}-${dd}-${yy}`)
+  variants.push(`${yyyy}-${mm}-${dd}`)
+  variants.push(`${mShort} ${d}, ${yyyy}`, `${mLong} ${d}, ${yyyy}`)
+  variants.push(`${d}-${mShort}-${yy}`, `${d}-${mShort}-${yyyy}`)
+  return variants
 }
 
 function union(boxes) {
