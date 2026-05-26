@@ -994,6 +994,55 @@ document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
   setSideZoom(side, dir === 'in' ? 1.25 : dir === 'out' ? 0.8 : 'fit')
 })
 
+// Delegated handlers for the cross-reference foot:
+//   - clicking 👍 / 👎 / ↺ records the verdict per-field (same store as drawer)
+//   - clicking the head/values area sets that finding as active, which
+//     re-renders both sides with the precise red box on the new field.
+document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
+  const li = e.target.closest('li[data-field]')
+  if (!li) return
+  const fkey = li.dataset.field
+
+  // Verdict buttons
+  const btn = e.target.closest('.finding-btn')
+  if (btn && btn.dataset.verdict) {
+    e.stopPropagation()
+    if (state.activeIdx < 0) return
+    const m = state.result.matches[state.activeIdx]
+    const key = m.suiteKey || m.suite
+    state.reviews[key] = state.reviews[key] || {}
+    if ('verdict' in state.reviews[key]) {
+      const legacy = state.reviews[key]
+      state.reviews[key] = { _tenantNote: legacy.note || '', __legacyVerdict: legacy.verdict }
+    }
+    const verdict = btn.dataset.verdict === 'none' ? null : btn.dataset.verdict
+    state.reviews[key][fkey] = state.reviews[key][fkey] || { verdict: null, note: '' }
+    state.reviews[key][fkey].verdict = verdict
+    persistLearnings()
+    // Re-render the foot so badges/active states update; the canvases stay put
+    $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+    return
+  }
+
+  // Click on head or values → select this finding (jumps the red box on both sides)
+  if (e.target.closest('[data-select]')) {
+    state.activeFieldKey = fkey
+    // Update the selector dropdown to reflect the new active finding
+    const sel = $('#pdfMatchSelector')
+    if (sel) {
+      const findings = buildFindingsList()
+      const idx = findings.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === fkey)
+      if (idx >= 0) sel.value = String(idx)
+    }
+    if (state.activeIdx >= 0) {
+      const m = state.result.matches[state.activeIdx]
+      renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+      renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+      $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+    }
+  }
+})
+
 // Global zoom kept for back-compat with the existing pdfZoom references
 state.pdfZoom = 1.0   // 1.0 = fit baseline
 $('#pdfZoomIn')   .addEventListener('click', () => setPdfZoom(Math.min(3.5, state.pdfZoom * 1.25)))
@@ -1170,13 +1219,33 @@ function renderReviewerFoot(m) {
   if (m.flags?.clean) return `<div class="empty-foot">✓ Every field matches on this tenant.</div>`
   if (m.flags?.argusOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.argus?.name)}</b> appears in Argus but no match was found in the client RR.</div>`
   if (m.flags?.clientOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.client?.name)}</b> appears in the client RR but no match was found in Argus.</div>`
-  return `<ul class="diff-list">${(m.diffs || []).map(d => `
-    <li class="sev-${d.severity}">
-      <span class="diff-sev">${d.severity}</span>
-      <div class="diff-label">${escape(d.label)}</div>
-      <div class="diff-values"><b>🍎 Argus:</b> ${escape(d.argusValue)} · <b>🍐 Client:</b> ${escape(d.clientValue)}</div>
+  const suiteKey = m.suiteKey || m.suite || ''
+  const reviews = state.reviews[suiteKey] || {}
+  // Per-finding card with INLINE verdict buttons — confirm/deny right here,
+  // no need to bounce back to the drawer. Clicking a card sets it as the
+  // active finding (selector + highlight update).
+  return `<ul class="diff-list">${(m.diffs || []).map((d, di) => {
+    const fkey = d.field || ('idx' + di)
+    const fr = (reviews && typeof reviews === 'object' && reviews[fkey]) || {}
+    const v = fr.verdict || null
+    const isActive = state.activeFieldKey === fkey
+    return `
+    <li class="sev-${d.severity} ${v ? 'verdict-' + v : ''} ${isActive ? 'active-finding' : ''}"
+        data-field="${escape(fkey)}">
+      <div class="diff-row-head" data-select="1">
+        <span class="diff-sev">${d.severity}</span>
+        <div class="diff-label">${escape(d.label)}</div>
+        ${v === 'good' ? '<span class="diff-verdict-tag good">👍 Confirmed</span>' : ''}
+        ${v === 'bad'  ? '<span class="diff-verdict-tag bad">👎 Rejected</span>' : ''}
+      </div>
+      <div class="diff-values" data-select="1"><b>🍎 Argus:</b> ${escape(d.argusValue)} · <b>🍐 Client:</b> ${escape(d.clientValue)}</div>
       ${d.rule ? `<div class="diff-rule">${escape(d.rule)}</div>` : ''}
-    </li>`).join('')}</ul>`
+      <div class="diff-actions">
+        <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good" title="Confirm real discrepancy">👍 Confirm</button>
+        <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"  title="Reject as false positive">👎 Reject</button>
+        <button class="finding-btn clear" data-verdict="none">↺ Clear</button>
+      </div>
+    </li>`}).join('')}</ul>`
 }
 
 async function renderReviewerSide(side, host, match, tenants) {
@@ -1655,23 +1724,39 @@ async function locateInPdf(entry, tenant, opts = {}) {
     }
     if (!anchor) continue
 
-    // Phase 2: if we have a target value, search within ±60pt vertical band of the anchor.
+    // Phase 2: if we have a target value, find the SINGLE best hit in the
+    // tenant's row. We deliberately do NOT union hits — when the needle is
+    // generic ("0.00", "1,400"), multiple rows match and the union becomes
+    // a page-wide stripe. Instead score every candidate by distance to the
+    // anchor and pick the closest.
     if (targetValue) {
       const valueNeedles = buildValueNeedles(targetValue)
-      const band = { yMin: anchor.y - 30, yMax: anchor.y + anchor.h + 30 }
+      // Tight band: only the tenant's own row. Most rent rolls put each
+      // tenant on a single horizontal line; a 12pt vertical reach in each
+      // direction comfortably covers wrapping but excludes neighbors.
+      const yCenter = anchor.y + anchor.h / 2
+      const band = { yMin: anchor.y - 12, yMax: anchor.y + anchor.h + 12 }
       const valueHits = []
       for (const item of tc.items) {
         const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
         const top = tr[5] - item.height
         if (top < band.yMin || top > band.yMax) continue
         const s = item.str
-        if (valueNeedles.some(n => s.includes(n))) {
-          valueHits.push({ x: tr[4], y: top, w: item.width, h: item.height })
-        }
+        if (!valueNeedles.some(n => s.includes(n))) continue
+        // Prefer hits whose text is MOSTLY the needle (less noise = more specific)
+        const center = { x: tr[4] + item.width / 2, y: top + item.height / 2 }
+        const dy = Math.abs(center.y - yCenter)
+        const dx = Math.abs(center.x - (anchor.x + anchor.w / 2))
+        // Distance prioritises Y (same row) over X (anywhere in that row).
+        const score = dy * 5 + dx
+        valueHits.push({ x: tr[4], y: top, w: item.width, h: item.height, score, len: s.length })
       }
       if (valueHits.length) {
-        const box = union(valueHits)
-        box.x -= 4; box.y -= 3; box.w += 8; box.h += 6
+        // Sort by score ascending — closest hit wins. Tiebreak by shortest
+        // text (most specific — "0.00" beats "0.00 364.00 LOREM").
+        valueHits.sort((a, b) => (a.score - b.score) || (a.len - b.len))
+        const hit = valueHits[0]
+        const box = { x: hit.x - 3, y: hit.y - 2, w: hit.w + 6, h: hit.h + 4 }
         return { page: p, rect: box, precision: 'value' }
       }
     }

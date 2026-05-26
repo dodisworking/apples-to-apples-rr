@@ -865,13 +865,38 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   padding: 10px 14px; border-radius: 10px;
   background: #fef2f2; border-left: 3px solid #dc2626;
   margin-bottom: 6px; font-size: 13px;
+  cursor: pointer;
+  transition: box-shadow .15s ease, transform .15s ease;
 }
+.diff-list li:hover { box-shadow: 0 2px 8px -2px rgba(0,0,0,.1); }
 .diff-list li.sev-MEDIUM { background: #fff7ed; border-left-color: #f97316; }
 .diff-list li.sev-LOW    { background: #fefce8; border-left-color: #ca8a04; }
-.diff-list li .diff-label { font-weight: 600; color: #111827; }
+.diff-list li.active-finding {
+  box-shadow: 0 0 0 2px #2563eb, 0 6px 16px -6px rgba(37, 99, 235, .4);
+  transform: translateY(-1px);
+}
+.diff-list li.verdict-good {
+  background: #f0fdf4; border-left-color: #16a34a;
+}
+.diff-list li.verdict-bad {
+  background: #fafafa; border-left-color: #9ca3af; opacity: .65;
+}
+.diff-list li.verdict-bad .diff-values { text-decoration: line-through; }
+.diff-list li .diff-row-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.diff-list li .diff-label { font-weight: 600; color: #111827; flex: 1; min-width: 0; }
 .diff-list li .diff-values { color: #4b5563; margin-top: 2px; }
 .diff-list li .diff-rule   { color: #6b7280; font-size: 11px; margin-top: 4px; font-style: italic; }
-.diff-list li .diff-sev    { float: right; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.diff-list li .diff-sev {
+  font-size: 9px; font-weight: 800; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(0,0,0,.08); color: #1f2937;
+}
+.diff-list li.sev-HIGH   .diff-sev { background: #dc2626; color: #fff; }
+.diff-list li.sev-MEDIUM .diff-sev { background: #f97316; color: #fff; }
+.diff-list li.sev-LOW    .diff-sev { background: #ca8a04; color: #fff; }
 .diff-list li.suppressed   { opacity: .6; }
 .diff-list li.confirmed    { border-left-color: #16a34a; background: #f0fdf4; }
 .diff-list .badge {
@@ -881,6 +906,14 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 .diff-list .badge.muted { background: #f3f4f6; color: #6b7280; }
 .diff-list .badge.good  { background: #d1fae5; color: #065f46; }
+.diff-list .diff-actions {
+  display: flex; gap: 6px; margin-top: 8px;
+}
+.diff-list .diff-verdict-tag {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+}
+.diff-list .diff-verdict-tag.good { background: #d1fae5; color: #065f46; }
+.diff-list .diff-verdict-tag.bad  { background: #f3f4f6; color: #6b7280; }
 
 /* ═══════════════════════════════════════════════════════
    GOOGLE-DOCS-STYLE FINDING COMMENTS
