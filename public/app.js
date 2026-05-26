@@ -219,13 +219,15 @@ const STAGE_TO_HEADLINE = {
 }
 
 function updateProgress({ stage, pct, msg }) {
-  const info = STAGE_TO_HEADLINE[stage] || { label: 'WORKING', morph: 'stage-1' }
-  $('#processStage').textContent = info.label
-  $('#processMessage').textContent = msg || ''
-  $('#processFill').style.width = Math.min(100, Math.max(0, pct || 0)) + '%'
-  $('#processHeadline').textContent = info.label + '…'
-  const morph = $('#morphFruit')
-  morph.className = 'big-fruit morph ' + info.morph
+  const info = STAGE_TO_HEADLINE[stage] || { label: 'WORKING' }
+  const stageEl    = document.getElementById('processStage');    if (stageEl)    stageEl.textContent    = info.label
+  const msgEl      = document.getElementById('processMessage');  if (msgEl)      msgEl.textContent      = msg || ''
+  const fillEl     = document.getElementById('processFill');     if (fillEl)     fillEl.style.width     = Math.min(100, Math.max(0, pct || 0)) + '%'
+  const headlineEl = document.getElementById('processHeadline'); if (headlineEl) headlineEl.textContent = info.label + '…'
+  // (The pear-to-apple morph runs as a pure CSS loop — no JS class manipulation
+  //  needed. Previously this referenced a #morphFruit element that no longer
+  //  exists, throwing a TypeError on every progress event and stranding the
+  //  user on the processing screen. Defensive lookups above prevent that.)
 }
 
 // ═══ Complete → render review ════════════════════════
