@@ -834,7 +834,11 @@ $('#openPdfReviewer').addEventListener('click', () => openPdfReviewer(0))
 $('#pdfReviewerClose').addEventListener('click', () => $('#pdfReviewer').setAttribute('aria-hidden', 'true'))
 $('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
 $('#pdfNext').addEventListener('click', () => stepReviewer(+1))
-$('#pdfMatchSelector').addEventListener('change', (e) => openPdfReviewer(parseInt(e.target.value, 10)))
+$('#pdfMatchSelector').addEventListener('change', (e) => {
+  const findings = buildFindingsList()
+  const f = findings[parseInt(e.target.value, 10)]
+  if (f) openPdfReviewer(f.matchIdx, f.fieldKey)
+})
 
 // 👁 Hide/show highlight overlay
 state.highlightHidden = false
@@ -959,12 +963,16 @@ document.addEventListener('keydown', (e) => {
 })
 
 function stepReviewer(delta) {
-  const list = reviewerList()
-  if (!list.length) return
-  let cur = list.findIndex(i => i === state.activeIdx)
+  // Walk the FLAT findings list (one step per finding, not per tenant) so the
+  // cell-level highlight steps cleanly through every flagged value.
+  const findings = buildFindingsList()
+  if (!findings.length) return
+  let cur = findings.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === state.activeFieldKey)
+  if (cur < 0) cur = findings.findIndex(f => f.matchIdx === state.activeIdx)
   if (cur < 0) cur = 0
-  const next = (cur + delta + list.length) % list.length
-  openPdfReviewer(list[next])
+  const next = (cur + delta + findings.length) % findings.length
+  const f = findings[next]
+  openPdfReviewer(f.matchIdx, f.fieldKey)
 }
 
 // Which matches show up in the reviewer's selector. Defaults to all non-clean rows.
@@ -1046,32 +1054,47 @@ function wirePdfDivider() {
   })
 }
 
-async function openPdfReviewer(idx) {
-  const list = reviewerList()
-  if (!list.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
-  if (!list.includes(idx)) idx = list[0]
-  state.activeIdx = idx
-  const pos = list.indexOf(idx) + 1
-  $('#pdfPosition').textContent = `${pos} / ${list.length}`
+// The cross-reference selector and Prev/Next now walk the FLAT FINDINGS LIST.
+// Each option in the dropdown is one finding (Suite + Tenant + Field) — picking
+// it sets both state.activeIdx and state.activeFieldKey, which lets locateInPdf
+// produce a TIGHT cell-level box (not just the tenant row). For unmatched
+// tenants (argus-only / client-only) we still highlight the tenant row.
+async function openPdfReviewer(idxOrFinding, fieldKey = null) {
+  const findings = buildFindingsList()
+  if (!findings.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
 
-  // Populate selector
+  // Resolve the active finding from args:
+  //  - numeric idxOrFinding + fieldKey → locate that exact finding
+  //  - numeric idxOrFinding alone → first finding for that match
+  //  - default → first finding overall
+  let activeFinding =
+    findings.find(f => f.matchIdx === idxOrFinding && f.fieldKey === fieldKey) ||
+    findings.find(f => f.matchIdx === idxOrFinding) ||
+    findings[0]
+  if (!activeFinding) return
+
+  state.activeIdx = activeFinding.matchIdx
+  state.activeFieldKey = activeFinding.fieldKey
+
+  // Populate selector: one option per finding
   const sel = $('#pdfMatchSelector')
-  sel.innerHTML = list.map(i => {
-    const m = state.result.matches[i]
-    const label = `Suite ${m.suite} — ${m.argus?.name || m.client?.name || '(?)'} · ${matchSummary(m)}`
-    return `<option value="${i}" ${i === idx ? 'selected' : ''}>${escape(label)}</option>`
+  sel.innerHTML = findings.map((f, i) => {
+    const sevTag = f.severity === 'HIGH' ? '🔴' : f.severity === 'MEDIUM' ? '🟠' : '🟡'
+    const label = `${sevTag} ${f.tenantLabel} · ${f.label}`
+    const sel = (f.matchIdx === activeFinding.matchIdx && f.fieldKey === activeFinding.fieldKey) ? 'selected' : ''
+    return `<option value="${i}" ${sel}>${escape(label)}</option>`
   }).join('')
 
-  // Foot: list of diffs
-  const m = state.result.matches[idx]
+  const pos = findings.findIndex(f => f.matchIdx === activeFinding.matchIdx && f.fieldKey === activeFinding.fieldKey) + 1
+  $('#pdfPosition').textContent = `${pos} / ${findings.length}`
+
+  const m = state.result.matches[activeFinding.matchIdx]
   $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
 
   $('#pdfReviewer').setAttribute('aria-hidden', 'false')
   wirePdfDivider()
 
-  // Wait two animation frames so the modal's flex layout has settled before
-  // we ask host.clientWidth — otherwise PDF fit-scale uses a stale (often 0)
-  // width and the PDF renders microscopic.
+  // Wait two animation frames so flex layout has settled
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
 
   await Promise.all([
