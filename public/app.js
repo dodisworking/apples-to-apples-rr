@@ -996,14 +996,17 @@ document.getElementById('pdfReviewerBody')?.addEventListener('click', (e) => {
 
 // Delegated handlers for the cross-reference foot:
 //   - clicking 👍 / 👎 / ↺ records the verdict per-field (same store as drawer)
-//   - clicking the head/values area sets that finding as active, which
-//     re-renders both sides with the precise red box on the new field.
+//   - clicking ANYWHERE else on the card selects that finding as active,
+//     which re-renders both sides with the precise red box on the new field.
+//
+// The whole card is clickable so the user doesn't have to hunt for a magic
+// hot zone — match the visual affordance (cursor:pointer on the whole li).
 document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   const li = e.target.closest('li[data-field]')
   if (!li) return
   const fkey = li.dataset.field
 
-  // Verdict buttons
+  // Verdict buttons get their own behavior (don't trigger the select)
   const btn = e.target.closest('.finding-btn')
   if (btn && btn.dataset.verdict) {
     e.stopPropagation()
@@ -1024,22 +1027,31 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
     return
   }
 
-  // Click on head or values → select this finding (jumps the red box on both sides)
-  if (e.target.closest('[data-select]')) {
-    state.activeFieldKey = fkey
-    // Update the selector dropdown to reflect the new active finding
-    const sel = $('#pdfMatchSelector')
-    if (sel) {
-      const findings = buildFindingsList()
-      const idx = findings.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === fkey)
-      if (idx >= 0) sel.value = String(idx)
-    }
-    if (state.activeIdx >= 0) {
-      const m = state.result.matches[state.activeIdx]
-      renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
-      renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
-      $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
-    }
+  // Anywhere else on the card → make this the active finding and re-render
+  // both PDF/XLSX sides with the new pinpoint.
+  if (state.activeFieldKey === fkey && li.classList.contains('active-finding')) {
+    // Already active — no-op (avoid an unnecessary re-render flash)
+    return
+  }
+  state.activeFieldKey = fkey
+  // Update the selector dropdown to reflect the new active finding
+  const sel = $('#pdfMatchSelector')
+  if (sel) {
+    const findings = buildFindingsList()
+    const idx = findings.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === fkey)
+    if (idx >= 0) sel.value = String(idx)
+  }
+  if (state.activeIdx >= 0) {
+    const m = state.result.matches[state.activeIdx]
+    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
+    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+    $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+    // Scroll the newly active card into view in case the user clicked near
+    // the edge — keeps the UI predictable after re-render.
+    requestAnimationFrame(() => {
+      const newLi = document.querySelector(`#pdfReviewerFoot li[data-field="${cssEscape(fkey)}"]`)
+      newLi?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    })
   }
 })
 
