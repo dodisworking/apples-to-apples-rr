@@ -921,7 +921,11 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   margin-left: auto;
   font-size: 14px; color: #6b7280;
   transition: transform .15s ease;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
 }
+.finding-toggle:hover { background: rgba(0,0,0,.05); color: #111827; }
 .finding-card.expanded .finding-toggle { transform: rotate(180deg); }
 .finding-body {
   display: none;
@@ -997,12 +1001,63 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 .evidence-card .field-row {
   display: grid; grid-template-columns: 110px 1fr;
-  gap: 6px; padding: 3px 0;
+  gap: 6px; padding: 3px 4px;
+  border-radius: 6px;
+  transition: background .15s ease, box-shadow .15s ease;
 }
 .evidence-card .field-row .label { color: #6b7280; font-size: 11px; }
 .evidence-card .field-row .value { color: #111827; font-size: 13px; }
 .evidence-card .field-row.flagged .value {
   background: #fee2e2; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+}
+/* Active field — lights up when the user clicks the matching finding card */
+.evidence-card .field-row.active-field {
+  background: rgba(220, 38, 38, .12);
+  box-shadow: 0 0 0 2px #dc2626, 0 4px 10px -4px rgba(220, 38, 38, .4);
+  animation: field-row-pulse 1.4s ease-in-out infinite;
+}
+.evidence-card .field-row.active-field .value {
+  font-weight: 700; color: #991b1b;
+}
+@keyframes field-row-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px #dc2626, 0 4px 10px -4px rgba(220, 38, 38, .4); }
+  50%      { box-shadow: 0 0 0 3px #f87171, 0 4px 14px -4px rgba(220, 38, 38, .6); }
+}
+
+/* Open-original button row at the top of the drawer */
+.drawer-open-row {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+.drawer-open-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all .15s ease;
+}
+.drawer-open-btn.apple {
+  background: #fef2f2; border-color: #fecaca; color: #991b1b;
+}
+.drawer-open-btn.apple:hover { background: #fee2e2; border-color: #fca5a5; }
+.drawer-open-btn.pear {
+  background: #f0fdf4; border-color: #bbf7d0; color: #065f46;
+}
+.drawer-open-btn.pear:hover { background: #dcfce7; border-color: #86efac; }
+.drawer-open-btn.alt {
+  background: #fff; border-color: #e5e7eb; color: #374151;
+  margin-left: auto;
+}
+.drawer-open-btn.alt:hover { background: #f9fafb; border-color: #d1d5db; }
+
+/* Active finding marker — subtle blue accent on the card the user just clicked */
+.finding-card.active-finding {
+  box-shadow: 0 0 0 2px #2563eb, 0 6px 16px -6px rgba(37, 99, 235, .4);
+  transform: translateY(-1px);
 }
 
 /* ─── PDF preview ────────────────────────────────────── */

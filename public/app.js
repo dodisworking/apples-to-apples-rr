@@ -396,7 +396,7 @@ function renderFindingsSidebar() {
     renderFindingsSidebar()
   }
 
-  // Click → open drawer at that tenant, expand that field
+  // Click → open drawer at that tenant, select that field
   $('#findingsSidebarList').onclick = (e) => {
     const row = e.target.closest('.findings-row[data-match]')
     if (!row) return
@@ -404,12 +404,16 @@ function renderFindingsSidebar() {
     const fieldKey = row.dataset.field
     state.activeFieldKey = fieldKey
     openDrawer(matchIdx)
-    // After openDrawer renders the body, expand the target finding card
+    // After openDrawer renders the body, select the target finding card,
+    // expand its explanation, and light up the matching evidence rows.
     requestAnimationFrame(() => {
       const card = document.querySelector(`.finding-card[data-field="${cssEscape(fieldKey)}"]`)
       if (card) {
-        card.classList.add('expanded')
+        card.classList.add('expanded', 'active-finding')
         card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        // Light up the evidence rows
+        document.querySelectorAll(`.evidence-card .field-row[data-field="${cssEscape(fieldKey)}"]`)
+          .forEach(r => r.classList.add('active-field'))
         const grid = document.getElementById('previewGrid')
         if (grid?.hidden) {
           grid.hidden = false
@@ -557,11 +561,34 @@ $('#reviewNote').addEventListener('input', (e) => {
   persistLearnings()
 })
 
-// Delegated handlers for finding cards (Google Docs comments style):
-//  - clicking the header expands/collapses
-//  - clicking 'Show in source' auto-opens the source preview pane below and scrolls there
-//  - clicking accept/reject/clear records the verdict per-field
+// Delegated handlers for the drawer:
+//  - clicking 📊/📄 open-original opens the uploaded file in a new tab
+//  - clicking 🔍 Cross-reference opens the full-screen reviewer
+//  - clicking 👍/👎/↺ on a finding records the verdict per-field
+//  - clicking the ▾ chevron expands the AI explanation paragraph
+//  - clicking the head/values area of a finding HIGHLIGHTS that field's row
+//    in the apple/pear evidence cards below (so user sees what's being compared)
 document.getElementById('drawerBody')?.addEventListener('click', (e) => {
+  // 📊/📄 Open original file in a new tab
+  const openBtn = e.target.closest('[data-open-original]')
+  if (openBtn) {
+    e.stopPropagation()
+    const which = openBtn.dataset.openOriginal
+    const file = which === 'argus' ? state.argusFile : state.clientFile
+    if (!file) { alert('Original file not available — re-upload to enable.'); return }
+    const url = URL.createObjectURL(file)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    return
+  }
+
+  // 🔍 Open the full-screen cross-reference reviewer
+  if (e.target.closest('#drawerOpenReviewer')) {
+    e.stopPropagation()
+    openPdfReviewer(state.activeIdx, state.activeFieldKey)
+    return
+  }
+
   const card = e.target.closest('.finding-card')
   if (!card) return
 
@@ -577,9 +604,9 @@ document.getElementById('drawerBody')?.addEventListener('click', (e) => {
     return
   }
 
-  // Verdict buttons
+  // Verdict buttons (Confirm / Reject / Clear)
   const btn = e.target.closest('.finding-btn')
-  if (btn) {
+  if (btn && btn.dataset.verdict) {
     e.stopPropagation()
     const field = card.dataset.field
     if (state.activeIdx < 0) return
@@ -602,16 +629,31 @@ document.getElementById('drawerBody')?.addEventListener('click', (e) => {
     return
   }
 
-  // Header / value rows toggle expand
+  // ▾ chevron toggles the explain paragraph
   if (e.target.closest('[data-toggle]')) {
+    e.stopPropagation()
     card.classList.toggle('expanded')
-    // When opening a finding card, auto-show sources too
-    if (card.classList.contains('expanded')) {
-      const grid = document.getElementById('previewGrid')
-      if (grid?.hidden) {
-        grid.hidden = false
-        document.getElementById('togglePreview').textContent = '🫣 Hide sources'
-      }
+    return
+  }
+
+  // Click head or values area → highlight that finding's field row in the
+  // apple/pear evidence cards below. This is the "show me what's being
+  // compared" interaction.
+  if (e.target.closest('[data-select]')) {
+    const field = card.dataset.field
+    state.activeFieldKey = field
+    // Mark the card as the active finding
+    document.querySelectorAll('.finding-card.active-finding').forEach(c => c.classList.remove('active-finding'))
+    card.classList.add('active-finding')
+    // Light up the corresponding rows in both evidence cards
+    document.querySelectorAll('.evidence-card .field-row.active-field').forEach(r => r.classList.remove('active-field'))
+    const rows = document.querySelectorAll(`.evidence-card .field-row[data-field="${cssEscape(field)}"]`)
+    rows.forEach(r => r.classList.add('active-field'))
+    if (rows[0]) rows[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    // Also re-render source previews with the new active field so the red box
+    // in the source documents jumps to the right cell.
+    if (state.result?.matches?.[state.activeIdx]) {
+      requestAnimationFrame(() => renderSourcePreviews(state.result.matches[state.activeIdx]))
     }
   }
 })
@@ -753,9 +795,11 @@ function renderDrawerBody(m) {
     m.flags?.argusOnly  ? '<div class="note-item">This tenant is in Argus but <b>not found</b> in the client RR.</div>' :
     m.flags?.clientOnly ? '<div class="note-item">This tenant is in the client RR but <b>not found</b> in Argus.</div>' : ''
 
-  // Each finding gets a Google-Docs-style comment card. Collapsed by default —
-  // click the header to expand: shows the full paragraph explanation, auto-opens
-  // the source previews, and scrolls into view.
+  // Each finding gets a Google-Docs-style comment card.
+  // Confirm/Reject buttons are ALWAYS visible (no expand needed). Click the
+  // body of a card to highlight the matching field rows in the evidence cards
+  // below — so the user can see exactly what's being compared.
+  // Click the small chevron to reveal the AI's explain/rule paragraph + note.
   const diffList = diffs.length ? `
     <div class="findings-list">
       ${diffs.map((d, fi) => {
@@ -765,37 +809,37 @@ function renderDrawerBody(m) {
         return `
         <div class="finding-card sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''} ${v ? 'verdict-' + v : ''}"
              data-field="${escape(fkey)}">
-          <div class="finding-head" data-toggle="1">
+          <div class="finding-head" data-select="1">
             <span class="finding-sev">${d.severity || 'LOW'}</span>
             <span class="finding-label">${escape(d.label || d.field)}</span>
             ${d.suppressed ? '<span class="badge muted">muted</span>' : ''}
             ${d.confirmed ? '<span class="badge good">confirmed</span>' : ''}
             ${v === 'good' ? '<span class="badge good">\u{1F44D}</span>' : ''}
             ${v === 'bad'  ? '<span class="badge muted">\u{1F44E}</span>' : ''}
-            <span class="finding-toggle">▾</span>
+            <span class="finding-toggle" data-toggle="1" title="Show explanation">▾</span>
           </div>
-          <div class="finding-vals" data-toggle="1">
+          <div class="finding-vals" data-select="1">
             <div class="fv apple">🍎 <b>${escape(d.argusValue)}</b></div>
             <div class="fv pear">🍐 <b>${escape(d.clientValue)}</b></div>
+          </div>
+          <div class="finding-actions">
+            <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good"    title="Confirm real discrepancy">👍 Confirm</button>
+            <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"     title="Reject as false positive">👎 Reject</button>
+            <button class="finding-btn clear"                                  data-verdict="none">↺ Clear</button>
+            <button class="finding-btn jump"                                   data-jump="1" title="Show in source">🔍 Show in source</button>
           </div>
           <div class="finding-body">
             ${d.explain ? `<div class="finding-explain">${escape(d.explain)}</div>` : ''}
             ${d.rule    ? `<div class="finding-rule"><b>Rule fired:</b> ${escape(d.rule)}</div>` : ''}
             ${d.suppressedReason ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
             ${d.confirmedNote    ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
-            <div class="finding-actions">
-              <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good"    title="Confirm real discrepancy">👍 Confirm</button>
-              <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"     title="Reject as false positive">👎 Reject</button>
-              <button class="finding-btn clear"                                  data-verdict="none">↺ Clear</button>
-              <button class="finding-btn jump"                                   data-jump="1" title="Show in source">🔍 Show in source</button>
-            </div>
             <textarea class="finding-note" placeholder="Note (optional)…">${escape(fr.note || '')}</textarea>
           </div>
         </div>`}).join('')}
     </div>` : '<div style="color:#6b7280;font-size:13px;margin-bottom:14px">No field-level diffs — clean match.</div>'
 
   const field = (label, v, key) => `
-    <div class="field-row ${flagged.has(key) ? 'flagged' : ''}">
+    <div class="field-row ${flagged.has(key) ? 'flagged' : ''}" data-field="${escape(key)}">
       <div class="label">${label}</div>
       <div class="value">${escape(v ?? '—')}</div>
     </div>`
@@ -820,7 +864,18 @@ function renderDrawerBody(m) {
       </div>`
   }
 
+  // Open-original buttons — let the paralegal pop the actual Argus Excel and
+  // Client PDF/XLSX in a new tab so they can see the full source files in
+  // their native viewer alongside the review.
+  const openButtons = `
+    <div class="drawer-open-row">
+      <button class="drawer-open-btn apple" data-open-original="argus" title="Open the uploaded Argus Excel">📊 Open Argus Excel</button>
+      <button class="drawer-open-btn pear"  data-open-original="client" title="Open the uploaded client rent roll">📄 Open Client RR</button>
+      <button class="drawer-open-btn alt"   id="drawerOpenReviewer" title="Open full cross-reference reviewer">🔍 Cross-reference</button>
+    </div>`
+
   return `
+    ${openButtons}
     ${status}
     ${diffList}
     <div class="evidence-grid">
