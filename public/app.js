@@ -1146,17 +1146,25 @@ async function renderReviewerSide(side, host, match, tenants) {
     const canvas = document.createElement('canvas')
     canvas.width = vp.width; canvas.height = vp.height
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+
+    // Wrap the canvas in a positioned div and put the highlight rect inside
+    // that wrap. This way the rect is positioned RELATIVE TO THE CANVAS, not
+    // relative to the host (which can have padding / position:absolute / margin
+    // that throws off canvas.offsetLeft|Top math). Bulletproof regardless of
+    // whether the side is expanded, drag-resized, or in default split mode.
     host.innerHTML = ''
-    host.style.position = 'relative'
-    host.appendChild(canvas)
+    const wrap = document.createElement('div')
+    wrap.style.cssText = 'position:relative;display:inline-block'
+    wrap.appendChild(canvas)
     const rect = document.createElement('div')
     rect.className = 'hl-rect ' + severityClass(match)
-    rect.style.left = (canvas.offsetLeft + loc.rect.x * scale) + 'px'
-    rect.style.top  = (canvas.offsetTop  + loc.rect.y * scale) + 'px'
+    rect.style.left   = (loc.rect.x * scale) + 'px'
+    rect.style.top    = (loc.rect.y * scale) + 'px'
     rect.style.width  = (loc.rect.w * scale) + 'px'
     rect.style.height = (loc.rect.h * scale) + 'px'
-    host.appendChild(rect)
-    host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 80)
+    wrap.appendChild(rect)
+    host.appendChild(wrap)
+    host.scrollTop = Math.max(0, loc.rect.y * scale - 80)
   } else {
     // XLSX side → render the actual sheet as a styled table with tenant rows highlighted.
     // When a specific finding is active, also pinpoint the cell holding its value.
@@ -1498,18 +1506,37 @@ async function locateInPdf(entry, tenant, opts = {}) {
     const viewport = page.getViewport({ scale: 1.0 })
     const tc = await page.getTextContent()
 
-    // Phase 1: find the tenant's anchor item (first item that matches suite or name).
-    let anchor = null
-    const matchesAnchor = (s) => {
-      if (suiteRe && suiteRe.test(s)) return true
-      return nameCandidates.some(c => new RegExp(escapeRe(c).replace(/\s+/g, '\\s*'), 'i').test(s))
+    // Phase 1: find the tenant's anchor.
+    // Try search terms IN ORDER OF SPECIFICITY:
+    //   1. Suite number (when present)
+    //   2. Full 2-word name ("Academy Sports") — exact phrase
+    //   3. Each single name token > 3 chars
+    // For each term, scan all text items; if any hit, pick the TOPMOST hit
+    // (smallest canvas Y) — for a rent roll, the tenant name appears at the
+    // top of its block, and we want to anchor on the first occurrence.
+    //
+    // This fixes the bug where a generic token like "Sports" matched
+    // "INSTANT REPLAY SPORTS C" (further down the page) before "ACADEMY
+    // SPORTS + OUTDO" if pdf.js text-item order didn't match visual order.
+    const searchTerms = []
+    if (suiteRe) searchTerms.push(suiteRe)
+    for (const cand of nameCandidates) {
+      searchTerms.push(new RegExp(escapeRe(cand).replace(/\s+/g, '\\s*'), 'i'))
     }
-    for (const item of tc.items) {
-      if (matchesAnchor(item.str)) {
-        const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
-        anchor = { x: tr[4], y: tr[5] - item.height, w: item.width, h: item.height }
-        break
+    let anchor = null
+    for (const re of searchTerms) {
+      const hits = []
+      for (const item of tc.items) {
+        if (re.test(item.str)) {
+          const tr = window.pdfjsLib.Util.transform(viewport.transform, item.transform)
+          hits.push({ x: tr[4], y: tr[5] - item.height, w: item.width, h: item.height, len: item.str.length })
+        }
       }
+      if (!hits.length) continue
+      // Pick the topmost hit; tiebreak by longest match (more specific text)
+      hits.sort((a, b) => (a.y - b.y) || (b.len - a.len))
+      anchor = hits[0]
+      break
     }
     if (!anchor) continue
 
@@ -1534,12 +1561,17 @@ async function locateInPdf(entry, tenant, opts = {}) {
       }
     }
 
-    // Fall back: tenant row-level box (wide horizontal sweep)
+    // Fall back: highlight ONLY the tenant-name text (anchor) plus a small pad.
+    // Earlier this expanded the box to viewport.width × 0.7 which turned it
+    // into a page-wide stripe — useful in theory, ugly in practice and often
+    // mis-positioned because the union of multiple text hits would span the
+    // whole table. Tight box around the anchor text is unambiguous and never
+    // covers unrelated rows.
     const box = {
-      x: Math.max(0, anchor.x - 8),
-      y: anchor.y - 4,
-      w: Math.min(viewport.width - Math.max(0, anchor.x - 8), anchor.w + viewport.width * 0.7),
-      h: anchor.h + 8,
+      x: Math.max(0, anchor.x - 4),
+      y: anchor.y - 3,
+      w: Math.min(viewport.width - Math.max(0, anchor.x - 4), anchor.w + 220),
+      h: anchor.h + 6,
     }
     return { page: p, rect: box, precision: 'row' }
   }
@@ -1615,17 +1647,19 @@ async function renderSide(side, host, match, tenants) {
   canvas.width = vp.width; canvas.height = vp.height
   await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
   host.innerHTML = ''
-  host.style.position = 'relative'
-  host.appendChild(canvas)
+  const wrap = document.createElement('div')
+  wrap.style.cssText = 'position:relative;display:inline-block'
+  wrap.appendChild(canvas)
 
   const rect = document.createElement('div')
   rect.className = 'hl-rect ' + severityClass(match)
-  rect.style.left   = (canvas.offsetLeft + loc.rect.x * scale) + 'px'
-  rect.style.top    = (canvas.offsetTop  + loc.rect.y * scale) + 'px'
+  rect.style.left   = (loc.rect.x * scale) + 'px'
+  rect.style.top    = (loc.rect.y * scale) + 'px'
   rect.style.width  = (loc.rect.w * scale) + 'px'
   rect.style.height = (loc.rect.h * scale) + 'px'
-  host.appendChild(rect)
-  host.scrollTop = Math.max(0, (canvas.offsetTop + loc.rect.y * scale) - 40)
+  wrap.appendChild(rect)
+  host.appendChild(wrap)
+  host.scrollTop = Math.max(0, loc.rect.y * scale - 40)
 }
 
 // Pick a severity-color class for the highlighter based on the worst diff in the match.
