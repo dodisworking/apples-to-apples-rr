@@ -1193,7 +1193,7 @@ async function renderReviewerSide(side, host, match, tenants) {
     // When a specific finding is active, also pinpoint the cell holding its value.
     const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
     if (sheets?.length) {
-      renderXlsxSheet(host, sheets[0], match, side, tenants || [], { targetValue })
+      renderXlsxSheet(host, sheets[0], match, side, tenants || [], { targetValue, fieldKey: state.activeFieldKey })
     } else {
       host.innerHTML = renderArgusCard(side, tenant, match)
     }
@@ -1204,6 +1204,26 @@ async function renderReviewerSide(side, host, match, tenants) {
 // Uses cell-level styles extracted server-side (fills, fonts, alignment,
 // borders, column widths, merged cells, number formats). Looks like
 // opening the workbook in Excel.
+// Argus Lease Summary 5-row tenant block: each field has a known (rowOffset, colIdx).
+// When we know the active finding's field, we can highlight EXACTLY that cell —
+// no text matching needed. Falls back to needle search if field isn't mapped.
+const ARGUS_FIELD_CELL = {
+  tenant_name:         { row: 0, col: 0 },
+  suite:               { row: 1, col: 0 },
+  lease_start:         { row: 2, col: 0 },
+  lease_end:           { row: 2, col: 0 },
+  sqft:                { row: 0, col: 1 },
+  base_rent_psf:       { row: 0, col: 3 },
+  base_rent_annual:    { row: 1, col: 3 },
+  rent_steps_count:    { row: 0, col: 4 },
+  rent_step_date:      { row: 0, col: 4 },
+  rent_step_amount:    { row: 0, col: 5 },
+  free_rent_count:     { row: 0, col: 8 },
+  free_rent:           { row: 0, col: 8 },
+  pct_rent_breakpoint: { row: 1, col: 10 },
+  pct_rent_overage:    { row: 2, col: 10 },
+}
+
 function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
   const rows = sheet.rows || []
   if (!rows.length) {
@@ -1214,7 +1234,10 @@ function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
   const styledCells = styled.cells || []
   const merges = styled.merges || []
   const targetValue = opts.targetValue || null
+  const fieldKey = opts.fieldKey || null
   const valueNeedles = targetValue ? buildValueNeedles(targetValue) : []
+  // Deterministic Argus cell pinpoint: field key → known (rowOffset, colIdx)
+  const argusCell = (side === 'argus' && fieldKey && ARGUS_FIELD_CELL[fieldKey]) || null
 
   // Build a covered map for merged cells (suppresses rendering of cells inside a merge except the top-left)
   const covered = new Set()
@@ -1267,20 +1290,26 @@ function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
       const text = raw == null || raw === '' ? '' : (typeof raw === 'number' ? fmtCell(raw, styleObj.fmt) : String(raw))
       const css = cellCss(styleObj)
       const mergeAttr = merge ? ` rowspan="${merge.rowSpan}" colspan="${merge.colSpan}"` : ''
-      // Pinpoint highlight: if this cell contains the active finding's target value,
-      // mark it with a red outline + pulse — the precise red box on the cell.
+      // Pinpoint highlight: mark the EXACT cell tied to the active finding.
+      // Priority 1 (Argus side): deterministic field→(row,col) map.
+      // Priority 2 (fallback / Client side): match the value text in any block cell.
       let cellHit = ''
-      if (valueNeedles.length && isInBlock && raw != null && raw !== '') {
-        // Check BOTH the raw value AND the formatted display text — Excel
-        // stores 30.5 as a number, but the finding's needle is "30.50".
-        const rawStr = String(raw)
-        const dispStr = String(text)
-        const rawStripped = rawStr.replace(/[$,\s]/g, '')
-        const dispStripped = dispStr.replace(/[$,\s]/g, '')
-        if (valueNeedles.some(n =>
-          rawStr.includes(n) || dispStr.includes(n) ||
-          rawStripped.includes(n) || dispStripped.includes(n)
-        )) cellHit = ' xlsx-cell-hit'
+      if (isInBlock) {
+        const offset = rIdx - blockStart
+        if (argusCell && offset === argusCell.row && c === argusCell.col) {
+          cellHit = ' xlsx-cell-hit'
+        } else if (!argusCell && valueNeedles.length && raw != null && raw !== '') {
+          // Check BOTH the raw value AND the formatted display text — Excel
+          // stores 30.5 as a number, but the finding's needle is "30.50".
+          const rawStr = String(raw)
+          const dispStr = String(text)
+          const rawStripped = rawStr.replace(/[$,\s]/g, '')
+          const dispStripped = dispStr.replace(/[$,\s]/g, '')
+          if (valueNeedles.some(n =>
+            rawStr.includes(n) || dispStr.includes(n) ||
+            rawStripped.includes(n) || dispStripped.includes(n)
+          )) cellHit = ' xlsx-cell-hit'
+        }
       }
       html += `<td${mergeAttr} class="${cellHit.trim()}"${css ? ` style="${css}"` : ''}>${escape(text)}</td>`
     }

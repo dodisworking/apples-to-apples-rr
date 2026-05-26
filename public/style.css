@@ -731,29 +731,32 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   font-size: 10px;
   z-index: 2;
 }
+/* Active tenant block: subtle row-number marker + thin top/bottom hairlines.
+   Deliberately soft so the per-cell hit (below) is the clear focal point. */
 .pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block .xlsx-rownum {
-  background: #dc2626 !important; color: #fff;
+  background: #fee2e2 !important; color: #b91c1c;
+  box-shadow: inset 3px 0 0 0 #dc2626;
 }
 .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-start td {
-  border-top: 3px solid #dc2626 !important;
+  border-top: 1px dashed #fca5a5 !important;
 }
 .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-end td {
-  border-bottom: 3px solid #dc2626 !important;
+  border-bottom: 1px dashed #fca5a5 !important;
 }
-.pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block td {
-  box-shadow: inset 0 0 0 9999px rgba(220, 38, 38, 0.08);
-}
+/* No inset shadow on every cell — that's what made the whole tenant look highlighted. */
+
+/* Per-cell pinpoint: this is the ONLY strong red — points at the exact value */
 .pdf-reviewer-canvas .xlsx-table td.xlsx-cell-hit {
   outline: 3px solid #dc2626 !important;
   outline-offset: -3px;
-  background: rgba(220, 38, 38, .25) !important;
+  background: rgba(220, 38, 38, .28) !important;
   font-weight: 700 !important;
   animation: cell-hit-pulse 1.4s ease-in-out infinite;
   position: relative; z-index: 1;
 }
 @keyframes cell-hit-pulse {
-  0%, 100% { outline-color: #dc2626; background: rgba(220, 38, 38, .25); }
-  50%      { outline-color: #f87171; background: rgba(220, 38, 38, .4); }
+  0%, 100% { outline-color: #dc2626; background: rgba(220, 38, 38, .28); }
+  50%      { outline-color: #f87171; background: rgba(220, 38, 38, .45); }
 }
 
 /* "View Client as Apple" template — client data rendered in Argus's 5-row layout */
