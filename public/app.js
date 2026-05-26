@@ -16,7 +16,40 @@ const state = {
   currentView: 'as-argus',
   activeIdx: -1,
   abort: null,
+  debugLog: [],                  // ring buffer of [A2A] events for copy-paste troubleshooting
 }
+
+// ═══ Diagnostic logger ════════════════════════════════
+// Every meaningful pipeline event is tagged [A2A] and pushed into state.debugLog.
+// User can press the "Copy logs" button in the reviewer header to grab the
+// last ~200 events as plain text for sharing.
+function log(tag, data) {
+  const t = new Date().toISOString().slice(11, 23)   // HH:MM:SS.mmm
+  let payload = ''
+  try {
+    payload = data == null ? '' : (typeof data === 'string' ? data : JSON.stringify(data))
+  } catch (e) { payload = String(data) }
+  const line = `[${t}] [A2A] ${tag}${payload ? ' ' + payload : ''}`
+  console.log(line)
+  state.debugLog.push(line)
+  if (state.debugLog.length > 400) state.debugLog.shift()
+}
+window.__a2aLogs = () => state.debugLog.join('\n')
+window.__a2aCopyLogs = async () => {
+  const text = state.debugLog.join('\n')
+  try { await navigator.clipboard.writeText(text); console.log('[A2A] logs copied — ' + state.debugLog.length + ' lines') }
+  catch (e) { console.log('[A2A] copy failed, here are the logs:\n' + text) }
+}
+
+// Capture unhandled errors and promise rejections — these are the things
+// that silently leave the UI stuck on a Loading… spinner.
+window.addEventListener('error', (e) => {
+  log('window.error', { msg: e.message, src: e.filename + ':' + e.lineno + ':' + e.colno })
+})
+window.addEventListener('unhandledrejection', (e) => {
+  log('window.unhandledrejection', { reason: String(e.reason), stack: e.reason?.stack?.slice(0, 300) })
+})
+log('boot', { ua: navigator.userAgent.slice(0, 80), date: new Date().toISOString() })
 
 // ═══ Stage routing ════════════════════════════════════
 function showStage(id) {
@@ -910,6 +943,26 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') document.getElementById('toggleHighlight')?.click()
 })
 
+// 📋 Copy diagnostic logs to clipboard
+document.getElementById('copyDebugLogs')?.addEventListener('click', async () => {
+  const btn = document.getElementById('copyDebugLogs')
+  const text = state.debugLog.join('\n')
+  try {
+    await navigator.clipboard.writeText(text || '(no logs yet)')
+    const orig = btn.textContent
+    btn.textContent = `✓ Copied ${state.debugLog.length} lines`
+    setTimeout(() => { btn.textContent = orig }, 1800)
+  } catch (e) {
+    // Fallback: show a textarea modal the user can copy from manually
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80vw;height:60vh;z-index:99999;padding:12px;font:11px/1.4 ui-monospace,monospace;background:#111;color:#eee;border:1px solid #555;border-radius:8px'
+    document.body.appendChild(ta)
+    ta.select()
+    ta.addEventListener('blur', () => ta.remove(), { once: true })
+  }
+})
+
 // Side-focus — clicking ANYWHERE on the side header bar (or the ⛶ button, or
 // pressing 1/2 on the keyboard) toggles fullscreen for that side. The whole
 // label bar is interactive so it's hard to miss.
@@ -1005,11 +1058,13 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   const li = e.target.closest('li[data-field]')
   if (!li) return
   const fkey = li.dataset.field
+  log('foot.click', { fkey, target: e.target.tagName + '.' + (e.target.className || '').slice(0, 40) })
 
   // Verdict buttons get their own behavior (don't trigger the select)
   const btn = e.target.closest('.finding-btn')
   if (btn && btn.dataset.verdict) {
     e.stopPropagation()
+    log('foot.verdict', { fkey, verdict: btn.dataset.verdict })
     if (state.activeIdx < 0) return
     const m = state.result.matches[state.activeIdx]
     const key = m.suiteKey || m.suite
@@ -1030,9 +1085,10 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   // Anywhere else on the card → make this the active finding and re-render
   // both PDF/XLSX sides with the new pinpoint.
   if (state.activeFieldKey === fkey && li.classList.contains('active-finding')) {
-    // Already active — no-op (avoid an unnecessary re-render flash)
+    log('foot.select.noop', { fkey, reason: 'already active' })
     return
   }
+  log('foot.select', { fkey, prevField: state.activeFieldKey })
   state.activeFieldKey = fkey
   // Update the selector dropdown to reflect the new active finding
   const sel = $('#pdfMatchSelector')
@@ -1043,8 +1099,10 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   }
   if (state.activeIdx >= 0) {
     const m = state.result.matches[state.activeIdx]
-    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants)
-    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants)
+    Promise.all([
+      renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants),
+      renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants),
+    ]).catch(e => log('foot.select.renderError', { msg: String(e) }))
     $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
     // Scroll the newly active card into view in case the user clicked near
     // the edge — keeps the UI predictable after re-render.
@@ -1052,6 +1110,8 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
       const newLi = document.querySelector(`#pdfReviewerFoot li[data-field="${cssEscape(fkey)}"]`)
       newLi?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     })
+  } else {
+    log('foot.select.noActiveIdx', {})
   }
 })
 
@@ -1176,6 +1236,7 @@ function wirePdfDivider() {
 // produce a TIGHT cell-level box (not just the tenant row). For unmatched
 // tenants (argus-only / client-only) we still highlight the tenant row.
 async function openPdfReviewer(idxOrFinding, fieldKey = null) {
+  log('openPdfReviewer.start', { idxOrFinding, fieldKey })
   const findings = buildFindingsList()
   if (!findings.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
 
@@ -1261,9 +1322,12 @@ function renderReviewerFoot(m) {
 }
 
 async function renderReviewerSide(side, host, match, tenants) {
+  const t0 = performance.now()
+  log('renderReviewerSide.start', { side, suite: match?.suite, field: state.activeFieldKey })
   host.innerHTML = '<div style="padding:20px;color:#9ca3af">Loading…</div>'
   const tenant = side === 'argus' ? match.argus : match.client
   if (!tenant) {
+    log('renderReviewerSide.noTenant', { side })
     host.innerHTML = `<div style="padding:20px;color:#9ca3af">Tenant not present on this side.</div>`
     return
   }
@@ -1274,23 +1338,34 @@ async function renderReviewerSide(side, host, match, tenants) {
     const diff = (match.diffs || []).find(d => d.field === state.activeFieldKey)
     if (diff) targetValue = side === 'argus' ? diff.argusValue : diff.clientValue
   }
+  log('renderReviewerSide.targetValue', { side, field: state.activeFieldKey, targetValue })
 
   // Client "View as Apple" — render the client's normalized tenant in the
   // Argus 5-row template layout for direct visual comparison with the Apple side.
   if (side === 'client' && state.pearView === 'as-apple') {
     host.innerHTML = renderClientAsApple(tenant, match)
+    log('renderReviewerSide.asAppleView', { side })
     return
   }
 
   let entry
-  try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
+  try { entry = await loadPdfDoc(side) }
+  catch (e) { log('renderReviewerSide.loadPdfDoc.error', { side, msg: String(e) }); entry = null }
 
   if (entry?.type === 'pdf') {
-    const loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey })
+    let loc
+    try { loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey }) }
+    catch (e) {
+      log('renderReviewerSide.locateInPdf.error', { side, msg: String(e), stack: e?.stack?.slice(0, 300) })
+      host.innerHTML = `<div style="padding:20px;color:#dc2626">Locator error: ${escape(String(e))}</div>`
+      return
+    }
     if (!loc) {
+      log('renderReviewerSide.locate.miss', { side, name: tenant?.name, suite: match.suite })
       host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
       return
     }
+    log('renderReviewerSide.locate.hit', { side, page: loc.page, precision: loc.precision, rect: loc.rect })
     const page = await entry.pdfDoc.getPage(loc.page)
     // Fit-to-container scale — always honor the actual host width so the PDF
     // fills (not overflows, not floats tiny). Multiply by user's zoom factor.
@@ -1324,14 +1399,17 @@ async function renderReviewerSide(side, host, match, tenants) {
     wrap.appendChild(rect)
     host.appendChild(wrap)
     host.scrollTop = Math.max(0, loc.rect.y * scale - 80)
+    log('renderReviewerSide.done.pdf', { side, ms: Math.round(performance.now() - t0) })
   } else {
     // XLSX side → render the actual sheet as a styled table with tenant rows highlighted.
     // When a specific finding is active, also pinpoint the cell holding its value.
     const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
     if (sheets?.length) {
       renderXlsxSheet(host, sheets[0], match, side, tenants || [], { targetValue, fieldKey: state.activeFieldKey })
+      log('renderReviewerSide.done.xlsx', { side, ms: Math.round(performance.now() - t0) })
     } else {
       host.innerHTML = renderArgusCard(side, tenant, match)
+      log('renderReviewerSide.done.argusCard', { side, ms: Math.round(performance.now() - t0) })
     }
   }
 }
@@ -1741,6 +1819,7 @@ async function locateInPdf(entry, tenant, opts = {}) {
   if (entry.type !== 'pdf' || !tenant) return null
   const targetValue = opts.targetValue || null
   const fieldKey = opts.fieldKey || null
+  log('locateInPdf.start', { name: tenant.name, suite: tenant.suite, fieldKey, targetValue })
 
   const suiteStr = tenant.suite ? String(tenant.suite).replace(/[^a-z0-9]/gi, '') : ''
   const suiteRe = suiteStr ? new RegExp(`(^|\\s|#)0*${escapeRe(suiteStr)}\\b`, 'i') : null
@@ -1789,6 +1868,7 @@ async function locateInPdf(entry, tenant, opts = {}) {
       // Pick the topmost hit; tiebreak by longest match (more specific text)
       hits.sort((a, b) => (a.y - b.y) || (b.len - a.len))
       anchor = hits[0]
+      log('locateInPdf.anchor', { page: p, term: String(re), x: Math.round(anchor.x), y: Math.round(anchor.y), w: Math.round(anchor.w) })
       break
     }
     if (!anchor) continue
@@ -1820,12 +1900,14 @@ async function locateInPdf(entry, tenant, opts = {}) {
         const score = dy * 5 + dx
         valueHits.push({ x: tr[4], y: top, w: item.width, h: item.height, score, len: s.length })
       }
+      log('locateInPdf.phase2.candidates', { count: valueHits.length, needles: valueNeedles })
       if (valueHits.length) {
         // Sort by score ascending — closest hit wins. Tiebreak by shortest
         // text (most specific — "0.00" beats "0.00 364.00 LOREM").
         valueHits.sort((a, b) => (a.score - b.score) || (a.len - b.len))
         const hit = valueHits[0]
         const box = { x: hit.x - 3, y: hit.y - 2, w: hit.w + 6, h: hit.h + 4 }
+        log('locateInPdf.phase2.hit', { x: Math.round(hit.x), y: Math.round(hit.y), score: Math.round(hit.score) })
         return { page: p, rect: box, precision: 'value' }
       }
     }
@@ -1839,6 +1921,7 @@ async function locateInPdf(entry, tenant, opts = {}) {
     if (fieldKey) {
       const headers = detectColumnHeaders(tc, viewport)
       const col = findColumnX(fieldKey, headers)
+      log('locateInPdf.phase25', { fieldKey, headerCount: headers.length, col: col ? { x: Math.round(col.x), w: Math.round(col.w) } : null })
       if (col) {
         // Cell box sits at the column's X, the anchor's Y, sized to roughly
         // a single cell width (header.w + a little padding for value overflow).
@@ -1865,8 +1948,10 @@ async function locateInPdf(entry, tenant, opts = {}) {
       w: Math.min(viewport.width - Math.max(0, anchor.x - 4), anchor.w + 220),
       h: anchor.h + 6,
     }
+    log('locateInPdf.fallback.row', { page: p })
     return { page: p, rect: box, precision: 'row' }
   }
+  log('locateInPdf.miss', { name: tenant.name, suite: tenant.suite })
   return null
 }
 
