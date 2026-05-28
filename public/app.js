@@ -2039,6 +2039,7 @@ async function renderSourcePreviews(m) {
 }
 
 async function renderSide(side, host, match, tenants) {
+  log('drawer.renderSide.start', { side, suite: match?.suite, field: state.activeFieldKey })
   host.innerHTML = '<div class="preview-placeholder">Loading…</div>'
   const tenant = side === 'argus' ? match.argus : match.client
   if (!tenant && ((side === 'argus' && match.flags?.clientOnly) || (side === 'client' && match.flags?.argusOnly))) {
@@ -2053,12 +2054,24 @@ async function renderSide(side, host, match, tenants) {
   }
 
   let entry
-  try { entry = await loadPdfDoc(side) } catch (e) { entry = null }
+  try { entry = await loadPdfDoc(side) }
+  catch (e) { log('drawer.renderSide.loadPdfDoc.error', { side, msg: String(e) }); entry = null }
   if (!entry) { host.innerHTML = '<div class="preview-placeholder">Source not loaded — re-upload to see preview.</div>'; return }
   if (entry.type === 'xlsx') return renderXlsxRow(host, tenant, match)
 
-  const loc = await locateInPdf(entry, tenant, { targetValue })
-  if (!loc) { host.innerHTML = `<div class="preview-placeholder">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`; return }
+  let loc
+  try { loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey }) }
+  catch (e) {
+    log('drawer.renderSide.locateInPdf.error', { side, msg: String(e), stack: e?.stack?.slice(0, 300) })
+    host.innerHTML = `<div class="preview-placeholder" style="color:#dc2626">Locator error: ${escape(String(e))}</div>`
+    return
+  }
+  if (!loc) {
+    log('drawer.renderSide.locate.miss', { side, name: tenant?.name })
+    host.innerHTML = `<div class="preview-placeholder">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
+    return
+  }
+  log('drawer.renderSide.locate.hit', { side, page: loc.page, precision: loc.precision, rect: loc.rect })
 
   const page = await entry.pdfDoc.getPage(loc.page)
   const scale = 1.3
@@ -2079,7 +2092,17 @@ async function renderSide(side, host, match, tenants) {
   rect.style.height = (loc.rect.h * scale) + 'px'
   wrap.appendChild(rect)
   host.appendChild(wrap)
-  host.scrollTop = Math.max(0, loc.rect.y * scale - 40)
+  // Scroll the highlight into vertical center of the preview pane so the
+  // user sees BOTH the box AND surrounding context (tenant name, nearby
+  // rows). Defer to next animation frame so the layout has settled —
+  // setting scrollTop before the canvas is sized doesn't stick.
+  requestAnimationFrame(() => {
+    const hostH = host.clientHeight || 300
+    const target = Math.max(0, loc.rect.y * scale - hostH / 3)
+    host.scrollTop = target
+    log('drawer.renderSide.scroll', { side, target, actual: host.scrollTop, hostH, scrollH: host.scrollHeight })
+  })
+  log('drawer.renderSide.done', { side, canvasH: canvas.height, rectY: Math.round(loc.rect.y * scale) })
 }
 
 // Pick a severity-color class for the highlighter based on the worst diff in the match.
