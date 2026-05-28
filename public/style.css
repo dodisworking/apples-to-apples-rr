@@ -941,6 +941,79 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 .diff-list .badge.ai-fp {
   background: #e0e7ff; color: #3730a3;
 }
+
+/* "Clean after AI" green banner at the top of the drawer body */
+.note-item.ai-cleaned {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #065f46;
+  font-weight: 600;
+}
+
+/* AI-removed false-positive disclosure block — collapsed by default */
+.ai-removed-block {
+  margin: 14px 0;
+  background: rgba(99, 102, 241, .04);
+  border: 1px solid rgba(99, 102, 241, .15);
+  border-radius: 10px;
+  padding: 0;
+}
+.ai-removed-block summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #3730a3;
+  list-style: none;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.ai-removed-block summary::-webkit-details-marker { display: none; }
+.ai-removed-block summary::before {
+  content: '▸'; font-size: 11px; margin-right: 4px;
+  transition: transform .15s ease;
+}
+.ai-removed-block[open] summary::before { transform: rotate(90deg); }
+.ai-removed-block summary:hover { background: rgba(99, 102, 241, .08); border-radius: 10px; }
+.ai-removed-list {
+  padding: 4px 14px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ai-removed-item {
+  background: #fff;
+  border: 1px solid #e0e7ff;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.ai-removed-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.ai-removed-head .finding-sev {
+  font-size: 9px; font-weight: 800; letter-spacing: .08em;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(0,0,0,.08); color: #1f2937;
+}
+.ai-removed-head .finding-sev.sev-HIGH   { background: #dc2626; color: #fff; }
+.ai-removed-head .finding-sev.sev-MEDIUM { background: #f97316; color: #fff; }
+.ai-removed-head .finding-sev.sev-LOW    { background: #ca8a04; color: #fff; }
+.ai-removed-label { flex: 1; font-weight: 600; color: #4b5563; }
+.ai-restore-btn {
+  background: #fff; border: 1px solid #d1d5db;
+  border-radius: 999px; padding: 3px 10px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  color: #4b5563;
+}
+.ai-restore-btn:hover { background: #f9fafb; border-color: #9ca3af; }
+.ai-removed-vals {
+  color: #6b7280; margin-bottom: 4px;
+  font-family: ui-monospace, monospace; font-size: 11px;
+}
+.ai-removed-reason {
+  background: rgba(99, 102, 241, .06);
+  border-left: 2px solid #6366f1;
+  padding: 4px 8px; border-radius: 4px;
+  color: #312e81; font-size: 11px;
+}
 .ai-verifier-note {
   background: rgba(99, 102, 241, .08);
   border-left: 2px solid #6366f1;

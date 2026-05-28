@@ -622,6 +622,35 @@ document.getElementById('drawerBody')?.addEventListener('click', (e) => {
     return
   }
 
+  // ↺ Restore an AI-removed false-positive finding
+  const restoreBtn = e.target.closest('[data-restore-field]')
+  if (restoreBtn) {
+    e.stopPropagation()
+    const field = restoreBtn.dataset.restoreField
+    if (state.activeIdx < 0) return
+    const m = state.result.matches[state.activeIdx]
+    const removed = (m.aiRemoved || []).find(r => r.field === field)
+    if (removed) {
+      // Move it back into m.diffs (with a tag so user knows they overrode the verifier)
+      m.diffs = m.diffs || []
+      m.diffs.push({
+        ...removed,
+        aiOverridden: true,
+        suppressedReason: null,
+      })
+      m.aiRemoved = m.aiRemoved.filter(r => r.field !== field)
+      // If diffs is no longer empty, drop the cleanedByAi flag
+      if (m.diffs.length && m.flags?.cleanedByAi) {
+        m.flags.cleanedByAi = false
+        m.flags.clean = false
+      }
+      log('drawer.restoreAiRemoved', { field })
+      openDrawer(state.activeIdx)
+      renderTable()
+    }
+    return
+  }
+
   const card = e.target.closest('.finding-card')
   if (!card) return
 
@@ -864,7 +893,29 @@ function renderDrawerBody(m) {
 
   const status =
     m.flags?.argusOnly  ? '<div class="note-item">This tenant is in Argus but <b>not found</b> in the client RR.</div>' :
-    m.flags?.clientOnly ? '<div class="note-item">This tenant is in the client RR but <b>not found</b> in Argus.</div>' : ''
+    m.flags?.clientOnly ? '<div class="note-item">This tenant is in the client RR but <b>not found</b> in Argus.</div>' :
+    m.flags?.cleanedByAi && (m.aiRemoved?.length) ? `<div class="note-item ai-cleaned">✓ Clean after AI second-pass — ${m.aiRemoved.length} false-positive finding${m.aiRemoved.length === 1 ? '' : 's'} removed by verifier.</div>` :
+    ''
+
+  // AI-removed false positives — collapsible block so user knows what was
+  // filtered AND can restore any they disagree with. Click any item to
+  // re-instate it as a regular finding.
+  const aiRemovedBlock = m.aiRemoved?.length ? `
+    <details class="ai-removed-block">
+      <summary>🤖 <b>${m.aiRemoved.length}</b> false-positive finding${m.aiRemoved.length === 1 ? '' : 's'} removed by AI verifier <span style="color:#6b7280;font-weight:400">— click to see what was filtered</span></summary>
+      <div class="ai-removed-list">
+        ${m.aiRemoved.map((r, ri) => `
+          <div class="ai-removed-item" data-removed-idx="${ri}">
+            <div class="ai-removed-head">
+              <span class="finding-sev sev-${r.severity || 'LOW'}">${r.severity || 'LOW'}</span>
+              <span class="ai-removed-label">${escape(r.label || r.field)}</span>
+              <button class="ai-restore-btn" data-restore-field="${escape(r.field)}" title="Restore this as a real finding">↺ Restore</button>
+            </div>
+            <div class="ai-removed-vals">🍎 ${escape(r.argusValue)} · 🍐 ${escape(r.clientValue)}</div>
+            <div class="ai-removed-reason">🤖 ${escape(r.aiReasoning || '')}${r.aiConfidence != null ? ` <span style="color:#6b7280">(${Math.round(r.aiConfidence * 100)}% confident)</span>` : ''}</div>
+          </div>`).join('')}
+      </div>
+    </details>` : ''
 
   // Each finding gets a Google-Docs-style comment card.
   // Confirm/Reject buttons are ALWAYS visible (no expand needed). Click the
@@ -951,6 +1002,7 @@ function renderDrawerBody(m) {
     ${openButtons}
     ${status}
     ${diffList}
+    ${aiRemovedBlock}
     <div class="evidence-grid">
       ${sideCard('apple', a)}
       ${sideCard('pear',  c)}
