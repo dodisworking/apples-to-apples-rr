@@ -868,6 +868,18 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   display: flex; align-items: center; justify-content: space-between;
 }
 .drawer-title { font-size: 18px; font-weight: 700; color: #111827; }
+/* Match-by badge — shown beside the tenant name to expose how matcher paired them */
+.match-badge {
+  display: inline-block;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  margin-left: 8px; vertical-align: middle;
+  cursor: help;
+}
+.match-badge.strong { background: #d1fae5; color: #065f46; }
+.match-badge.medium { background: #fef3c7; color: #92400e; }
+.match-badge.weak   { background: #fee2e2; color: #991b1b; }
+.match-badge.solo   { background: #fee2e2; color: #991b1b; }
 .drawer-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: #f3f4f6; cursor: pointer; }
 .drawer-close:hover { background: #e5e7eb; }
 

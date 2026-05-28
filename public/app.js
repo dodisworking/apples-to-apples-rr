@@ -724,7 +724,7 @@ function openDrawer(idx) {
   const legacyNote    = (typeof review === 'object' && '_tenantNote' in review) ? review._tenantNote
                      : (typeof review === 'object' && 'note' in review)        ? review.note : ''
 
-  $('#drawerTitle').innerHTML = `Suite <b>${escape(m.suite || '—')}</b> · ${escape(m.argus?.name || m.client?.name || '—')}`
+  $('#drawerTitle').innerHTML = `Suite <b>${escape(m.suite || '—')}</b> · ${escape(m.argus?.name || m.client?.name || '—')}${renderMatchBadge(m)}`
   $('#drawerBody').innerHTML = renderDrawerBody(m)
 
   // Tenant-level review controls in the drawer foot:
@@ -815,6 +815,29 @@ function persistLearnings() {
       }
     } catch (e) { /* silent */ }
   }, 600)
+}
+
+// Compact "matched by" badge shown beside the tenant name in the drawer.
+// Tells the paralegal HOW these two rows got paired and how confident the
+// matcher was, so they can sanity-check before trusting the comparison.
+function renderMatchBadge(m) {
+  if (m.flags?.argusOnly || m.flags?.clientOnly) {
+    return ` <span class="match-badge solo" title="No pair found in the other rent roll">⚠ unmatched</span>`
+  }
+  const by = m.matchedBy || '?'
+  const score = m.matchScore != null ? Math.round(m.matchScore * 100) + '%' : ''
+  const labels = {
+    suite: '🔑 by suite',
+    name: '🅰 by name',
+    sqft: '📏 by SF',
+    combined: '🔗 combined',
+    'suite-fallback': '🔑 suite (fallback)',
+  }
+  const cls = m.matchScore >= 0.75 ? 'strong' : m.matchScore >= 0.55 ? 'medium' : 'weak'
+  const detail = m.matchDetail
+    ? `name ${Math.round((m.matchDetail.name || 0) * 100)}% · suite ${m.matchDetail.suite ? '✓' : '✗'} · SF ${m.matchDetail.sf ? '✓' : '✗'}`
+    : ''
+  return ` <span class="match-badge ${cls}" title="${escape(detail)}">${labels[by] || by} ${score}</span>`
 }
 
 function renderDrawerBody(m) {
