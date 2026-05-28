@@ -698,19 +698,19 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 }
 /* Hide-highlight toggle */
 body.no-highlight .pdf-reviewer-canvas .hl-rect { opacity: 0; }
-body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block td { background: inherit !important; box-shadow: none !important; }
-body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-start td { border-top: 1px solid #e5e7eb !important; }
-body.no-highlight .pdf-reviewer-canvas .xlsx-table tr.xlsx-block-end td   { border-bottom: 1px solid #e5e7eb !important; }
-body.no-highlight .pdf-reviewer-canvas .xlsx-table td.xlsx-active-cell { background: inherit !important; outline: none !important; }
+body.no-highlight .xlsx-host .xlsx-table tr.xlsx-active-block td { background: inherit !important; box-shadow: none !important; }
+body.no-highlight .xlsx-host .xlsx-table tr.xlsx-block-start td { border-top: 1px solid #e5e7eb !important; }
+body.no-highlight .xlsx-host .xlsx-table tr.xlsx-block-end td   { border-bottom: 1px solid #e5e7eb !important; }
+body.no-highlight .xlsx-host .xlsx-table td.xlsx-active-cell { background: inherit !important; outline: none !important; }
 body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { background: #fff !important; outline: none !important; font-weight: 600; }
 /* XLSX sheet rendered with per-cell styles extracted server-side.
    Goal: looks like opening the workbook in Excel. */
-.pdf-reviewer-canvas .xlsx-sheet {
+.xlsx-host .xlsx-sheet {
   width: 100%; align-self: stretch; overflow: auto;
   background: #fff; border-radius: 6px;
   font-family: "Calibri", "Segoe UI", sans-serif;
 }
-.pdf-reviewer-canvas .xlsx-table {
+.xlsx-host .xlsx-table {
   border-collapse: collapse;
   font-size: 11px;
   table-layout: fixed;
@@ -722,9 +722,9 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 .pdf-reviewer-body.focus-pear  .pdf-reviewer-pear  .xlsx-table {
   font-size: 15px;
 }
-.pdf-reviewer-canvas .xlsx-table col.xlsx-col-rownum { width: 36px; }
-.pdf-reviewer-canvas .xlsx-table th,
-.pdf-reviewer-canvas .xlsx-table td {
+.xlsx-host .xlsx-table col.xlsx-col-rownum { width: 36px; }
+.xlsx-host .xlsx-table th,
+.xlsx-host .xlsx-table td {
   padding: 2px 5px;
   border: 1px solid #e5e7eb;
   vertical-align: middle;
@@ -735,7 +735,7 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pdf-reviewer-canvas .xlsx-table .xlsx-rownum {
+.xlsx-host .xlsx-table .xlsx-rownum {
   background: #f3f4f6;
   color: #6b7280;
   text-align: center;
@@ -746,20 +746,20 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 /* Active tenant block: subtle row-number marker + thin top/bottom hairlines.
    Deliberately soft so the per-cell hit (below) is the clear focal point. */
-.pdf-reviewer-canvas .xlsx-table tr.xlsx-active-block .xlsx-rownum {
+.xlsx-host .xlsx-table tr.xlsx-active-block .xlsx-rownum {
   background: #fee2e2 !important; color: #b91c1c;
   box-shadow: inset 3px 0 0 0 #dc2626;
 }
-.pdf-reviewer-canvas .xlsx-table tr.xlsx-block-start td {
+.xlsx-host .xlsx-table tr.xlsx-block-start td {
   border-top: 1px dashed #fca5a5 !important;
 }
-.pdf-reviewer-canvas .xlsx-table tr.xlsx-block-end td {
+.xlsx-host .xlsx-table tr.xlsx-block-end td {
   border-bottom: 1px dashed #fca5a5 !important;
 }
 /* No inset shadow on every cell — that's what made the whole tenant look highlighted. */
 
 /* Per-cell pinpoint: this is the ONLY strong red — points at the exact value */
-.pdf-reviewer-canvas .xlsx-table td.xlsx-cell-hit {
+.xlsx-host .xlsx-table td.xlsx-cell-hit {
   outline: 3px solid #dc2626 !important;
   outline-offset: -3px;
   background: rgba(220, 38, 38, .28) !important;
@@ -1216,10 +1216,21 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 .drawer-open-btn.alt:hover { background: #f9fafb; border-color: #d1d5db; }
 
-/* Active finding marker — subtle blue accent on the card the user just clicked */
+/* Active finding marker — pinned to the top of the drawer body so the user
+   never loses sight of the Confirm/Reject buttons while scrolling sources. */
 .finding-card.active-finding {
   box-shadow: 0 0 0 2px #2563eb, 0 6px 16px -6px rgba(37, 99, 235, .4);
-  transform: translateY(-1px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #eff6ff;   /* slight blue tint so user knows it's the pinned one */
+  border-color: #93c5fd;
+}
+.finding-card.active-finding .finding-head {
+  margin-bottom: 6px;
+}
+.finding-card.active-finding .finding-vals {
+  margin-bottom: 6px;
 }
 
 /* ─── PDF preview ────────────────────────────────────── */

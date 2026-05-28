@@ -752,6 +752,12 @@ function openDrawer(idx) {
   const m = state.result.matches[idx]
   if (!m) return
   state.activeIdx = idx
+  // Auto-activate the first finding if none chosen yet — drives the
+  // sticky finding card and the active-cell highlight on both sources.
+  const firstActive = (m.diffs || []).find(d => !d.suppressed)?.field
+  if (!state.activeFieldKey || !(m.diffs || []).some(d => d.field === state.activeFieldKey)) {
+    state.activeFieldKey = firstActive || null
+  }
   const key = m.suiteKey || m.suite
   const review = state.reviews[key] || {}
   const legacyVerdict = (typeof review === 'object' && 'verdict' in review) ? review.verdict : null
@@ -760,6 +766,15 @@ function openDrawer(idx) {
 
   $('#drawerTitle').innerHTML = `Suite <b>${escape(m.suite || '—')}</b> · ${escape(m.argus?.name || m.client?.name || '—')}${renderMatchBadge(m)}`
   $('#drawerBody').innerHTML = renderDrawerBody(m)
+  // Apply the active-finding class to the just-rendered card so the
+  // sticky-at-top styling kicks in immediately.
+  if (state.activeFieldKey) {
+    const card = document.querySelector(`.finding-card[data-field="${cssEscape(state.activeFieldKey)}"]`)
+    card?.classList.add('active-finding')
+    // Also light up the matching evidence rows
+    document.querySelectorAll(`.evidence-card .field-row[data-field="${cssEscape(state.activeFieldKey)}"]`)
+      .forEach(r => r.classList.add('active-field'))
+  }
 
   // Tenant-level review controls in the drawer foot:
   // Only show when there's no per-finding to attach to (argusOnly/clientOnly or clean match).
@@ -1636,6 +1651,9 @@ function renderXlsxSheet(host, sheet, match, side, tenants, opts = {}) {
 
   host.innerHTML = html
   host.style.position = 'relative'
+  // Apply xlsx-host class so the scoped .xlsx-host .xlsx-table styles
+  // apply equally in the cross-reference modal AND in the drawer source preview.
+  host.classList.add('xlsx-host')
 
   if (blockStart >= 0) {
     // Prefer scrolling the highlighted cell into view if we found one; else the block row
@@ -2160,7 +2178,20 @@ async function renderSide(side, host, match, tenants) {
   try { entry = await loadPdfDoc(side) }
   catch (e) { log('drawer.renderSide.loadPdfDoc.error', { side, msg: String(e) }); entry = null }
   if (!entry) { host.innerHTML = '<div class="preview-placeholder">Source not loaded — re-upload to see preview.</div>'; return }
-  if (entry.type === 'xlsx') return renderXlsxRow(host, tenant, match)
+  // XLSX side → render the FULL styled sheet just like the cross-reference does,
+  // so the user sees the actual Argus spreadsheet with the active cell pinpointed.
+  if (entry.type === 'xlsx') {
+    const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
+    if (sheets?.length) {
+      renderXlsxSheet(host, sheets[0], match, side, side === 'argus' ? state.result.argusTenants : state.result.clientTenants, {
+        targetValue, fieldKey: state.activeFieldKey,
+      })
+      log('drawer.renderSide.done.xlsx', { side })
+      return
+    }
+    // Fallback to the simple key-value table if the styled sheet didn't come back
+    return renderXlsxRow(host, tenant, match)
+  }
 
   let loc
   try { loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey }) }
