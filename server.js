@@ -6,8 +6,8 @@ import { parseFile } from './lib/parsers.js'
 import { detect, decideRoles } from './lib/detect.js'
 import { parseArgusFromSheets } from './lib/argus.js'
 import { normalizeClient } from './lib/client.js'
-import { reconcile } from './lib/reconcile.js'
-import { verifyFindings } from './lib/verifier.js'
+import { reconcile, compareTenantsExternal } from './lib/reconcile.js'
+import { verifyFindings, reunifyOrphans } from './lib/verifier.js'
 import { buildExcel } from './lib/excel.js'
 import { loadAll as loadLearnings, recordBulk, forProperty, stats as learningStats } from './lib/learnings.js'
 
@@ -141,6 +141,40 @@ app.post('/api/compare', async (req, res) => {
     const learnings = propertyName ? forProperty(propertyName) : []
     if (learnings.length) console.log(`[compare] applying ${learnings.length} prior learning(s) for ${propertyName}`)
     const result = reconcile({ argus: argusParsed, client: clientNormalized, learnings })
+
+    // ── Step 8.5: Orphan reunification ───────────────────
+    // The deterministic matcher leaves leftovers (argusOnly + clientOnly).
+    // Send BOTH lists to Claude in one call — the LLM is uniquely good at
+    // catching DBA-vs-legal-name pairings the Levenshtein scoring missed.
+    // Any new pairs get full compareTenants treatment so they show up in
+    // the findings list like any other match.
+    const orphanA = result.matches.filter(x => x.flags?.argusOnly).map(x => x.argus).filter(Boolean)
+    const orphanC = result.matches.filter(x => x.flags?.clientOnly).map(x => x.client).filter(Boolean)
+    if (orphanA.length && orphanC.length) {
+      emit('progress', { stage: 'reunify', pct: 91, msg: `🤖 Reunifying ${orphanA.length} + ${orphanC.length} unmatched tenants…` })
+      try {
+        const { pairs } = await reunifyOrphans(orphanA, orphanC)
+        if (pairs.length) {
+          // For each AI-suggested pair: build a new match record using the
+          // same compareTenants logic, then remove the old solo entries.
+          for (const p of pairs) {
+            const newMatch = compareTenantsExternal(p.argus, p.client)
+            newMatch.matchedBy = 'ai-reunified'
+            newMatch.matchScore = p.confidence
+            newMatch.aiReunified = { reasoning: p.reasoning, confidence: p.confidence }
+            // Drop the two orphan match entries
+            result.matches = result.matches.filter(x =>
+              !(x.flags?.argusOnly && x.argus === p.argus) &&
+              !(x.flags?.clientOnly && x.client === p.client))
+            result.matches.push(newMatch)
+          }
+          console.log(`[reunify] AI rescued ${pairs.length} orphan pair(s)`)
+          emit('progress', { stage: 'reunify-done', pct: 91.5, msg: `✓ AI rescued ${pairs.length} additional tenant pair${pairs.length === 1 ? '' : 's'}` })
+        }
+      } catch (e) {
+        console.warn('[reunify] failed (continuing):', e.message)
+      }
+    }
 
     // ── Step 9: AI second-pass verifier (always runs, even in dumb mode) ──
     // Sends each tenant's full Apple+Pear context plus its findings to Claude

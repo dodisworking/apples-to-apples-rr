@@ -861,11 +861,13 @@ function renderMatchBadge(m) {
     sqft: '📏 by SF',
     combined: '🔗 combined',
     'suite-fallback': '🔑 suite (fallback)',
+    'ai-reunified': '🤖 AI-reunified',
   }
   const cls = m.matchScore >= 0.75 ? 'strong' : m.matchScore >= 0.55 ? 'medium' : 'weak'
-  const detail = m.matchDetail
-    ? `name ${Math.round((m.matchDetail.name || 0) * 100)}% · suite ${m.matchDetail.suite ? '✓' : '✗'} · SF ${m.matchDetail.sf ? '✓' : '✗'}`
-    : ''
+  const detail = m.aiReunified?.reasoning
+    || (m.matchDetail
+      ? `name ${Math.round((m.matchDetail.name || 0) * 100)}% · suite ${m.matchDetail.suite ? '✓' : '✗'} · SF ${m.matchDetail.sf ? '✓' : '✗'}`
+      : '')
   return ` <span class="match-badge ${cls}" title="${escape(detail)}">${labels[by] || by} ${score}</span>`
 }
 
