@@ -773,8 +773,10 @@ function openDrawer(idx) {
   })
   $('#reviewNote').value = legacyNote || ''
 
-  $('#previewGrid').hidden = true
-  $('#togglePreview').textContent = '📄 Show sources'
+  // Source previews are now VISIBLE BY DEFAULT — the whole point of this
+  // tool is "argus on left, client on right, with highlights".
+  $('#previewGrid').hidden = false
+  $('#togglePreview').textContent = '🫣 Hide sources'
 
   $('#drawer').setAttribute('aria-hidden', 'false')
   requestAnimationFrame(() => renderSourcePreviews(m))
