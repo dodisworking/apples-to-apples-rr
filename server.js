@@ -7,6 +7,7 @@ import { detect, decideRoles } from './lib/detect.js'
 import { parseArgusFromSheets } from './lib/argus.js'
 import { normalizeClient } from './lib/client.js'
 import { reconcile } from './lib/reconcile.js'
+import { verifyFindings } from './lib/verifier.js'
 import { buildExcel } from './lib/excel.js'
 import { loadAll as loadLearnings, recordBulk, forProperty, stats as learningStats } from './lib/learnings.js'
 
@@ -140,6 +141,26 @@ app.post('/api/compare', async (req, res) => {
     const learnings = propertyName ? forProperty(propertyName) : []
     if (learnings.length) console.log(`[compare] applying ${learnings.length} prior learning(s) for ${propertyName}`)
     const result = reconcile({ argus: argusParsed, client: clientNormalized, learnings })
+
+    // ── Step 9: AI second-pass verifier (always runs, even in dumb mode) ──
+    // Sends each tenant's full Apple+Pear context plus its findings to Claude
+    // Haiku for a sanity check. False positives get suppressed with reasoning.
+    emit('progress', { stage: 'verifying', pct: 92, msg: '🤖 Second-pass cross-check — verifying findings against source data…' })
+    try {
+      const totalToVerify = result.matches.filter(m => (m.diffs || []).some(d => !d.suppressed)).length
+      const verifyStart = Date.now()
+      const { stats } = await verifyFindings(result.matches, (done, total) => {
+        // Update the live progress message so user sees the second pass running
+        const pct = 92 + Math.min(2, (done / Math.max(1, total)) * 2)
+        emit('progress', { stage: 'verifying', pct, msg: `🤖 Verifying findings — ${done}/${total} tenants cross-checked…` })
+      })
+      const verifyMs = Date.now() - verifyStart
+      console.log(`[verify] ${stats.reviewed} tenants reviewed in ${verifyMs}ms — ${stats.falsePositives} false positives suppressed, ${stats.confirmed} confirmed`)
+      emit('progress', { stage: 'verifying-done', pct: 94, msg: `✓ Verifier: ${stats.falsePositives} false positives suppressed · ${stats.confirmed} confirmed · ${totalToVerify} tenants reviewed` })
+    } catch (e) {
+      console.warn('[verify] second-pass verifier failed (continuing without):', e.message)
+      emit('progress', { stage: 'verifying-skip', pct: 94, msg: '⚠ Verifier skipped (continuing without)' })
+    }
 
     emit('progress', { stage: 'rendering', pct: 95, msg: 'Plating up Excel report…' })
 

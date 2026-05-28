@@ -931,6 +931,37 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 .diff-list .badge.muted { background: #f3f4f6; color: #6b7280; }
 .diff-list .badge.good  { background: #d1fae5; color: #065f46; }
+
+/* AI verifier badges (drawer + cross-reference foot) */
+.badge.ai-confirmed,
+.diff-list .badge.ai-confirmed {
+  background: #ddd6fe; color: #5b21b6;
+}
+.badge.ai-fp,
+.diff-list .badge.ai-fp {
+  background: #e0e7ff; color: #3730a3;
+}
+.ai-verifier-note {
+  background: rgba(99, 102, 241, .08);
+  border-left: 2px solid #6366f1;
+  padding: 6px 10px; border-radius: 4px;
+  color: #312e81 !important; font-style: normal !important;
+}
+.ai-verifier-note.false_positive {
+  background: rgba(99, 102, 241, .08);
+  border-left-color: #6366f1;
+}
+.ai-verifier-note.confirmed {
+  background: rgba(220, 38, 38, .08);
+  border-left-color: #dc2626;
+  color: #7f1d1d !important;
+}
+.diff-list li.ai-false_positive {
+  opacity: .55;
+}
+.diff-list li.ai-false_positive .diff-values {
+  text-decoration: line-through;
+}
 .diff-list .diff-actions {
   display: flex; gap: 6px; margin-top: 8px;
 }

@@ -840,6 +840,21 @@ function renderMatchBadge(m) {
   return ` <span class="match-badge ${cls}" title="${escape(detail)}">${labels[by] || by} ${score}</span>`
 }
 
+// AI verifier badge — shown on each finding when the second-pass Claude
+// review has classified it. Confirmed = "🤖 real ✓ 92%", false_positive =
+// "🤖 false positive 88%".
+function renderAiBadge(av) {
+  if (!av || !av.verdict) return ''
+  const pct = av.confidence != null ? Math.round(av.confidence * 100) + '%' : ''
+  if (av.verdict === 'false_positive') {
+    return `<span class="badge ai-fp" title="${escape(av.reasoning || 'flagged as false positive by AI verifier')}">🤖 false positive ${pct}</span>`
+  }
+  if (av.verdict === 'confirmed') {
+    return `<span class="badge ai-confirmed" title="${escape(av.reasoning || 'confirmed real discrepancy by AI verifier')}">🤖 real ${pct}</span>`
+  }
+  return ''
+}
+
 function renderDrawerBody(m) {
   const a = m.argus, c = m.client
   const diffs = m.diffs || []
@@ -863,12 +878,13 @@ function renderDrawerBody(m) {
         const fr = (reviews && typeof reviews === 'object' && reviews[fkey]) || {}
         const v = fr.verdict || null
         return `
-        <div class="finding-card sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''} ${v ? 'verdict-' + v : ''}"
+        <div class="finding-card sev-${d.severity || 'LOW'} ${d.suppressed ? 'suppressed' : ''} ${d.confirmed ? 'confirmed' : ''} ${v ? 'verdict-' + v : ''} ${d.aiVerifier ? 'ai-' + d.aiVerifier.verdict : ''}"
              data-field="${escape(fkey)}">
           <div class="finding-head" data-select="1">
             <span class="finding-sev">${d.severity || 'LOW'}</span>
             <span class="finding-label">${escape(d.label || d.field)}</span>
-            ${d.suppressed ? '<span class="badge muted">muted</span>' : ''}
+            ${d.aiVerifier ? renderAiBadge(d.aiVerifier) : ''}
+            ${d.suppressed && !d.aiVerifier ? '<span class="badge muted">muted</span>' : ''}
             ${d.confirmed ? '<span class="badge good">confirmed</span>' : ''}
             ${v === 'good' ? '<span class="badge good">\u{1F44D}</span>' : ''}
             ${v === 'bad'  ? '<span class="badge muted">\u{1F44E}</span>' : ''}
@@ -887,7 +903,8 @@ function renderDrawerBody(m) {
           <div class="finding-body">
             ${d.explain ? `<div class="finding-explain">${escape(d.explain)}</div>` : ''}
             ${d.rule    ? `<div class="finding-rule"><b>Rule fired:</b> ${escape(d.rule)}</div>` : ''}
-            ${d.suppressedReason ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
+            ${d.aiVerifier ? `<div class="finding-rule ai-verifier-note ${d.aiVerifier.verdict}">🤖 <b>AI verifier (${Math.round((d.aiVerifier.confidence || 0) * 100)}%):</b> ${escape(d.aiVerifier.reasoning || '')}</div>` : ''}
+            ${d.suppressedReason && !d.aiVerifier ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.suppressedReason)}</div>` : ''}
             ${d.confirmedNote    ? `<div class="finding-rule" style="color:#16a34a">🧠 ${escape(d.confirmedNote)}</div>`    : ''}
             <textarea class="finding-note" placeholder="Note (optional)…">${escape(fr.note || '')}</textarea>
           </div>
@@ -1326,16 +1343,18 @@ function renderReviewerFoot(m) {
     const v = fr.verdict || null
     const isActive = state.activeFieldKey === fkey
     return `
-    <li class="sev-${d.severity} ${v ? 'verdict-' + v : ''} ${isActive ? 'active-finding' : ''}"
+    <li class="sev-${d.severity} ${v ? 'verdict-' + v : ''} ${isActive ? 'active-finding' : ''} ${d.aiVerifier ? 'ai-' + d.aiVerifier.verdict : ''}"
         data-field="${escape(fkey)}">
       <div class="diff-row-head" data-select="1">
         <span class="diff-sev">${d.severity}</span>
         <div class="diff-label">${escape(d.label)}</div>
+        ${d.aiVerifier ? renderAiBadge(d.aiVerifier) : ''}
         ${v === 'good' ? '<span class="diff-verdict-tag good">👍 Confirmed</span>' : ''}
         ${v === 'bad'  ? '<span class="diff-verdict-tag bad">👎 Rejected</span>' : ''}
       </div>
       <div class="diff-values" data-select="1"><b>🍎 Argus:</b> ${escape(d.argusValue)} · <b>🍐 Client:</b> ${escape(d.clientValue)}</div>
       ${d.rule ? `<div class="diff-rule">${escape(d.rule)}</div>` : ''}
+      ${d.aiVerifier ? `<div class="diff-rule ai-verifier-note ${d.aiVerifier.verdict}">🤖 <b>AI verifier:</b> ${escape(d.aiVerifier.reasoning || '')}</div>` : ''}
       <div class="diff-actions">
         <button class="finding-btn good ${v === 'good' ? 'active' : ''}" data-verdict="good" title="Confirm real discrepancy">👍 Confirm</button>
         <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"  title="Reject as false positive">👎 Reject</button>
