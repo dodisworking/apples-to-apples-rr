@@ -91,6 +91,21 @@ app.post('/api/compare', async (req, res) => {
   }
   const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000)
 
+  // Wrap a long-running await with a periodic "still working" progress emit
+  // so the UI elapsed counter visibly moves and the user doesn't think the
+  // pipeline hung mid-LLM-call. emit() runs every `intervalMs`; stage/pct
+  // stay fixed but msg gets a (XXs) elapsed suffix.
+  async function withHeartbeat(stage, pct, baseMsg, work, intervalMs = 3000) {
+    const t0 = Date.now()
+    emit('progress', { stage, pct, msg: baseMsg })
+    const ticker = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1000)
+      emit('progress', { stage, pct, msg: `${baseMsg} (${s}s)` })
+    }, intervalMs)
+    try { return await work() }
+    finally { clearInterval(ticker) }
+  }
+
   try {
     const { argus, client, mode } = req.body || {}
     if (!argus?.base64 || !client?.base64) throw new Error('argus and client files required')
@@ -116,8 +131,13 @@ app.post('/api/compare', async (req, res) => {
     const parsedClient = await parseFile(clientBuf, client.name)
 
     // ── Step 3: normalize Pear → Apple ───────────────────
-    emit('progress', { stage: 'normalizing', pct: 38, msg: 'Turning pear into apple — normalizing client to Argus format…' })
-    const clientNormalized = await normalizeClient({ parsed: parsedClient, filename: client.name, model: m })
+    // This is a 20-60s Claude call. withHeartbeat keeps the UI alive so
+    // the user sees the elapsed counter tick and doesn't think it hung.
+    const clientNormalized = await withHeartbeat(
+      'normalizing', 38,
+      '🤖 Claude is reading the client rent roll — dense PDFs take 20-60s…',
+      () => normalizeClient({ parsed: parsedClient, filename: client.name, model: m })
+    )
     console.log(`[compare] client: ${clientNormalized.tenants.length} tenants, reported ${clientNormalized.topLevelTotalSF || '?'} SF`)
 
     // ── Steps 4-8: walk the spec checks in order ─────────
@@ -151,9 +171,12 @@ app.post('/api/compare', async (req, res) => {
     const orphanA = result.matches.filter(x => x.flags?.argusOnly).map(x => x.argus).filter(Boolean)
     const orphanC = result.matches.filter(x => x.flags?.clientOnly).map(x => x.client).filter(Boolean)
     if (orphanA.length && orphanC.length) {
-      emit('progress', { stage: 'reunify', pct: 91, msg: `🤖 Reunifying ${orphanA.length} + ${orphanC.length} unmatched tenants…` })
       try {
-        const { pairs } = await reunifyOrphans(orphanA, orphanC)
+        const { pairs } = await withHeartbeat(
+          'reunify', 91,
+          `🤖 Reunifying ${orphanA.length} Argus + ${orphanC.length} client unmatched tenants…`,
+          () => reunifyOrphans(orphanA, orphanC)
+        )
         if (pairs.length) {
           // For each AI-suggested pair: build a new match record using the
           // same compareTenants logic, then remove the old solo entries.

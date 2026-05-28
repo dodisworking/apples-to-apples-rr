@@ -248,6 +248,11 @@ const STAGE_TO_HEADLINE = {
   'check-freerent':  { label: 'CHECK: COL 9 — FREE RENT',  morph: 'stage-3' },
   'check-pctrent':   { label: 'CHECK: COL 10 — % RENT',    morph: 'stage-3' },
   'reconciling':     { label: 'MATCHING & DIFFING',    morph: 'stage-3' },
+  'reunify':         { label: 'AI REUNIFYING ORPHANS', morph: 'stage-3' },
+  'reunify-done':    { label: 'AI REUNIFIED',          morph: 'stage-3' },
+  'verifying':       { label: 'AI VERIFIER PASS',      morph: 'stage-3' },
+  'verifying-done':  { label: 'AI VERIFIED',           morph: 'stage-3' },
+  'verifying-skip':  { label: 'AI VERIFIER SKIPPED',   morph: 'stage-3' },
   'rendering':       { label: 'PLATING REPORT',        morph: 'stage-done' },
 }
 
