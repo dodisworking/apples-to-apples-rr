@@ -1854,49 +1854,14 @@ async function renderReviewerSide(side, host, match, tenants) {
     try { loc = await locateInPdf(entry, tenant, { targetValue, fieldKey: state.activeFieldKey }) }
     catch (e) {
       log('renderReviewerSide.locateInPdf.error', { side, msg: String(e), stack: e?.stack?.slice(0, 300) })
-      host.innerHTML = `<div style="padding:20px;color:#dc2626">Locator error: ${escape(String(e))}</div>`
-      return
+      loc = null
     }
-    if (!loc) {
-      log('renderReviewerSide.locate.miss', { side, name: tenant?.name, suite: match.suite })
-      host.innerHTML = `<div style="padding:20px;color:#9ca3af">Couldn't locate "${escape(tenant?.name || match.suite || '')}" in this PDF.</div>`
-      return
-    }
-    log('renderReviewerSide.locate.hit', { side, page: loc.page, precision: loc.precision, rect: loc.rect })
-    const page = await entry.pdfDoc.getPage(loc.page)
-    // Fit-to-container scale — always honor the actual host width so the PDF
-    // fills (not overflows, not floats tiny). Multiply by user's zoom factor.
-    // requestAnimationFrame above guaranteed layout is settled before this.
-    const baseVp = page.getViewport({ scale: 1.0 })
-    const containerW = host.clientWidth || 600
-    const hostWidth = Math.max(200, containerW - 24)   // 24 = padding
-    const fitScale = hostWidth / baseVp.width
-    const sideZoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
-    const scale = fitScale * sideZoom
-    const vp = page.getViewport({ scale })
-    const canvas = document.createElement('canvas')
-    canvas.width = vp.width; canvas.height = vp.height
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
-
-    // Wrap the canvas in a positioned div and put the highlight rect inside
-    // that wrap. This way the rect is positioned RELATIVE TO THE CANVAS, not
-    // relative to the host (which can have padding / position:absolute / margin
-    // that throws off canvas.offsetLeft|Top math). Bulletproof regardless of
-    // whether the side is expanded, drag-resized, or in default split mode.
-    host.innerHTML = ''
-    const wrap = document.createElement('div')
-    wrap.style.cssText = 'position:relative;display:inline-block'
-    wrap.appendChild(canvas)
-    const rect = document.createElement('div')
-    rect.className = 'hl-rect ' + severityClass(match)
-    rect.style.left   = (loc.rect.x * scale) + 'px'
-    rect.style.top    = (loc.rect.y * scale) + 'px'
-    rect.style.width  = (loc.rect.w * scale) + 'px'
-    rect.style.height = (loc.rect.h * scale) + 'px'
-    wrap.appendChild(rect)
-    host.appendChild(wrap)
-    host.scrollTop = Math.max(0, loc.rect.y * scale - 80)
-    log('renderReviewerSide.done.pdf', { side, ms: Math.round(performance.now() - t0) })
+    // Render the WHOLE PDF (all pages, scrollable). If we located the finding,
+    // overlay the highlight on the right page and auto-scroll to it; if not, we
+    // still show the full document so the reviewer can scroll and find it.
+    const note = loc ? '' : `<div class="fulldoc-note">Couldn't auto-pinpoint "${escape(tenant?.name || match.suite || '')}" — showing the full document; scroll to find it.</div>`
+    await renderPdfFull(host, entry, side, { loc, sevClass: severityClass(match), note })
+    log('renderReviewerSide.done.pdf', { side, located: !!loc, ms: Math.round(performance.now() - t0) })
   } else {
     // XLSX side → render the actual sheet as a styled table with tenant rows highlighted.
     // When a specific finding is active, also pinpoint the cell holding its value.
@@ -1909,6 +1874,56 @@ async function renderReviewerSide(side, host, match, tenants) {
       log('renderReviewerSide.done.argusCard', { side, ms: Math.round(performance.now() - t0) })
     }
   }
+}
+
+// Render the ENTIRE PDF for one side — every page, stacked and scrollable.
+// If `loc` is given, overlay the highlight rect on its page and scroll to it.
+// Shared by the matched-side view (so you can scroll past the located page) and
+// the missing-side view (full doc, no highlight).
+async function renderPdfFull(host, entry, side, { loc = null, sevClass = '', note = '' } = {}) {
+  // Single block container so the host's flex-centering treats note + pages as
+  // one column (not two side-by-side flex items).
+  const root = document.createElement('div')
+  root.style.width = '100%'
+  root.innerHTML = note || ''
+  const pagesWrap = document.createElement('div')
+  pagesWrap.className = 'fulldoc-pages'
+  root.appendChild(pagesWrap)
+  host.innerHTML = ''
+  host.appendChild(root)
+  const pdfDoc = entry.pdfDoc
+  const hostWidth = Math.max(200, (host.clientWidth || 600) - 24)
+  const sideZoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
+  let hlEl = null
+  for (let p = 1; p <= pdfDoc.numPages; p++) {
+    const page = await pdfDoc.getPage(p)
+    const baseVp = page.getViewport({ scale: 1.0 })
+    const scale = (hostWidth / baseVp.width) * sideZoom
+    const vp = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width = vp.width; canvas.height = vp.height
+    canvas.style.cssText = 'display:block;box-shadow:0 1px 4px rgba(0,0,0,.12)'
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+    // Each page in its own positioned wrap so the highlight rect is relative to
+    // the canvas, not the scroll container.
+    const pageWrap = document.createElement('div')
+    pageWrap.style.cssText = 'position:relative;display:inline-block;margin:0 auto 8px'
+    pageWrap.appendChild(canvas)
+    if (loc && p === loc.page) {
+      const rect = document.createElement('div')
+      rect.className = 'hl-rect ' + sevClass
+      rect.style.left   = (loc.rect.x * scale) + 'px'
+      rect.style.top    = (loc.rect.y * scale) + 'px'
+      rect.style.width  = (loc.rect.w * scale) + 'px'
+      rect.style.height = (loc.rect.h * scale) + 'px'
+      pageWrap.appendChild(rect)
+      hlEl = rect
+    }
+    pagesWrap.appendChild(pageWrap)
+  }
+  // Auto-scroll the highlight into view once layout settles.
+  if (hlEl) setTimeout(() => hlEl.scrollIntoView({ block: 'center', behavior: 'instant' }), 50)
+  return hlEl
 }
 
 // Render the WHOLE document for one side (no tenant highlight). Used when a
@@ -1925,35 +1940,24 @@ async function renderFullDocSide(side, host, match) {
   catch (e) { log('renderFullDocSide.loadPdfDoc.error', { side, msg: String(e) }); entry = null }
 
   if (entry?.type === 'pdf') {
-    host.innerHTML = note
-    const wrap = document.createElement('div')
-    wrap.className = 'fulldoc-pages'
-    host.appendChild(wrap)
-    const pdfDoc = entry.pdfDoc
-    const hostWidth = Math.max(200, (host.clientWidth || 600) - 24)
-    const sideZoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
-    for (let p = 1; p <= pdfDoc.numPages; p++) {
-      const page = await pdfDoc.getPage(p)
-      const baseVp = page.getViewport({ scale: 1.0 })
-      const scale = (hostWidth / baseVp.width) * sideZoom
-      const vp = page.getViewport({ scale })
-      const canvas = document.createElement('canvas')
-      canvas.width = vp.width; canvas.height = vp.height
-      canvas.style.cssText = 'display:block;margin:0 auto 8px;box-shadow:0 1px 4px rgba(0,0,0,.12)'
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
-      wrap.appendChild(canvas)
-    }
-    log('renderFullDocSide.done.pdf', { side, pages: pdfDoc.numPages })
+    await renderPdfFull(host, entry, side, { note })
+    log('renderFullDocSide.done.pdf', { side, pages: entry.pdfDoc.numPages })
     return
   }
 
   // XLSX (or fallback): render the full sheet with no active block highlight.
   const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
   if (sheets?.length) {
-    host.innerHTML = note
+    // Single block container so the host's flex-centering treats note + sheet as
+    // one column (not two side-by-side flex items).
+    const root = document.createElement('div')
+    root.style.width = '100%'
+    root.innerHTML = note
     const sheetHost = document.createElement('div')
     sheetHost.style.cssText = 'position:relative'
-    host.appendChild(sheetHost)
+    root.appendChild(sheetHost)
+    host.innerHTML = ''
+    host.appendChild(root)
     renderXlsxSheet(sheetHost, sheets[0], match, side, [], {})
     log('renderFullDocSide.done.xlsx', { side })
     return
