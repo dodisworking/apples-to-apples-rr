@@ -1157,6 +1157,11 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   resize: vertical; background: #fff;
 }
 .finding-note:focus { outline: 2px solid #f97316; outline-offset: -1px; }
+.finding-note.needs-comment {
+  border-color: #ef4444; background: #fef2f2;
+  box-shadow: 0 0 0 1px #ef4444 inset;
+}
+.finding-note.needs-comment::placeholder { color: #dc2626; }
 
 .evidence-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;

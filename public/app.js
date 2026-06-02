@@ -373,6 +373,7 @@ function buildFindingsList() {
       })
     } else {
       for (const d of (m.diffs || [])) {
+        if (d.suppressed) continue   // previously-rejected diffs aren't live findings (keeps us consistent with flags.clean)
         out.push({
           matchIdx, fieldKey: d.field,
           label: d.label || d.field,
@@ -1288,6 +1289,10 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('input', (e) => {
   }
   state.reviews[key][fkey] = state.reviews[key][fkey] || { verdict: null, note: '' }
   state.reviews[key][fkey].note = ta.value
+  // Clear the "comment required" red flag live as soon as they type something,
+  // without re-rendering the foot (which would blow away focus mid-typing).
+  const stillNeeds = state.reviews[key][fkey].verdict === 'bad' && !ta.value.trim()
+  ta.classList.toggle('needs-comment', stillNeeds)
   persistLearnings()
 })
 
@@ -1379,17 +1384,35 @@ function findingVerdict(f) {
   if ('verdict' in r && !Object.values(r).some(v => v && typeof v === 'object' && 'verdict' in v)) return r.verdict
   return r[f.fieldKey]?.verdict || null
 }
-// Ordered list of matchIdx that carry at least one finding (skips clean tenants).
+function findingNote(f) {
+  const r = state.reviews?.[f.suiteKey]
+  if (!r || typeof r !== 'object') return ''
+  if ('verdict' in r && !Object.values(r).some(v => v && typeof v === 'object' && 'verdict' in v)) return r.note || ''
+  return r[f.fieldKey]?.note || ''
+}
+// A finding is "complete" once it has a verdict — AND, if it was REJECTED
+// (👎 false positive), once the reviewer has written a comment explaining why.
+// Confirmations need no comment. Rejections are the feedback that tunes the
+// model, so we require the reviewer to say what was wrong.
+function rejectNeedsComment(f) {
+  return findingVerdict(f) === 'bad' && !findingNote(f).trim()
+}
+function findingComplete(f) {
+  const v = findingVerdict(f)
+  if (!v) return false
+  if (v === 'bad') return !!findingNote(f).trim()
+  return true
+}
+// Walk EVERY suite in order — including clean ones. The lawyer reviews the whole
+// roll: clean suites just show "everything matches" and let them continue; only
+// suites that carry findings require a confirm/reject decision before advancing.
 function guidedOrder() {
-  const order = [], seen = new Set()
-  for (const f of buildFindingsList()) {
-    if (!seen.has(f.matchIdx)) { seen.add(f.matchIdx); order.push(f.matchIdx) }
-  }
-  return order
+  return (state.result?.matches || []).map((_, i) => i)
 }
 function suiteFindings(matchIdx) { return buildFindingsList().filter(f => f.matchIdx === matchIdx) }
-function suiteDecided(matchIdx) { return suiteFindings(matchIdx).every(f => !!findingVerdict(f)) }
-function allFindingsDecided() { return buildFindingsList().every(f => !!findingVerdict(f)) }
+// A suite with no findings (clean) is decided by definition — every() of [] is true.
+function suiteDecided(matchIdx) { return suiteFindings(matchIdx).every(findingComplete) }
+function allFindingsDecided() { return buildFindingsList().every(findingComplete) }
 
 async function openGuided(pos = 0) {
   const order = guidedOrder()
@@ -1427,7 +1450,7 @@ function refreshGuided() {
   const order = state.guided.order
   const all = buildFindingsList()
   const total = all.length
-  const decided = all.filter(f => !!findingVerdict(f)).length
+  const decided = all.filter(findingComplete).length
   const pos = state.guided.pos
 
   $('#guidedCount').textContent = `${decided} / ${total} findings reviewed`
@@ -1448,7 +1471,10 @@ function refreshGuided() {
   }
 
   const matchIdx = order[pos]
-  const suiteOpen = suiteFindings(matchIdx).filter(f => !findingVerdict(f)).length
+  const suiteList = suiteFindings(matchIdx)
+  const suiteUndecided = suiteList.filter(f => !findingVerdict(f)).length
+  const suiteNeedComment = suiteList.filter(rejectNeedsComment).length
+  const suiteOpen = suiteList.filter(f => !findingComplete(f)).length
   const suiteOk = suiteOpen === 0
   const isLast = pos >= order.length - 1
   const everything = allFindingsDecided()
@@ -1456,7 +1482,7 @@ function refreshGuided() {
   $('#guidedSuiteLabel').textContent = `Suite ${pos + 1} / ${order.length}`
   prevBtn.disabled = pos <= 0
 
-  // Next: only on non-final suites, only once this suite is fully decided.
+  // Next: only on non-final suites, only once this suite is fully complete.
   nextBtn.hidden = isLast
   nextBtn.disabled = !suiteOk
   nextBtn.textContent = suiteOk ? 'Next suite →' : `Decide ${suiteOpen} more →`
@@ -1467,11 +1493,21 @@ function refreshGuided() {
   exportBtn.textContent = everything ? '✅ Export Result' : `Decide ${total - decided} more to export`
 
   if (hint) {
-    hint.textContent = suiteOk
-      ? (isLast
-          ? (everything ? 'All findings reviewed — export your result.' : `Go back and finish the ${total - decided} skipped finding(s) to export.`)
-          : 'Suite complete — continue to the next one.')
-      : `Confirm 👍 or reject 👎 the ${suiteOpen} remaining finding(s) on this suite to continue.`
+    if (!suiteOk) {
+      // A reject without a comment is the most common blocker — call it out.
+      if (suiteNeedComment && suiteUndecided === 0) {
+        hint.textContent = `✍️ Add a comment to your ${suiteNeedComment} rejected finding(s) — a reason is required before you can continue.`
+      } else if (suiteNeedComment) {
+        hint.textContent = `Decide the remaining finding(s) and add a comment to your ${suiteNeedComment} rejected one(s) to continue.`
+      } else {
+        hint.textContent = `Confirm 👍 or reject 👎 the ${suiteUndecided} remaining finding(s) on this suite to continue.`
+      }
+    } else {
+      const clean = suiteList.length === 0
+      hint.textContent = isLast
+        ? (everything ? 'All findings reviewed — export your result.' : `Go back and finish the ${total - decided} unfinished finding(s) to export.`)
+        : (clean ? '✓ Everything matches on this suite — continue to the next one.' : 'Suite complete — continue to the next one.')
+    }
   }
 }
 
@@ -1700,11 +1736,14 @@ function renderReviewerFoot(m) {
   // Per-finding card with INLINE verdict buttons — confirm/deny right here,
   // no need to bounce back to the drawer. Clicking a card sets it as the
   // active finding (selector + highlight update).
-  return `<ul class="diff-list">${(m.diffs || []).map((d, di) => {
+  return `<ul class="diff-list">${(m.diffs || []).filter(d => !d.suppressed).map((d, di) => {
     const fkey = d.field || ('idx' + di)
     const fr = (reviews && typeof reviews === 'object' && reviews[fkey]) || {}
     const v = fr.verdict || null
     const isActive = state.activeFieldKey === fkey
+    // A rejection (👎) requires a comment before the reviewer can advance — flag
+    // the textarea so it's obvious what's blocking "Next suite".
+    const needsComment = v === 'bad' && !(fr.note || '').trim()
     return `
     <li class="sev-${d.severity} ${v ? 'verdict-' + v : ''} ${isActive ? 'active-finding' : ''} ${d.aiVerifier ? 'ai-' + d.aiVerifier.verdict : ''}"
         data-field="${escape(fkey)}">
@@ -1723,7 +1762,7 @@ function renderReviewerFoot(m) {
         <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"  title="Reject as false positive">👎 Reject</button>
         <button class="finding-btn clear" data-verdict="none">↺ Clear</button>
       </div>
-      <textarea class="finding-note" data-field="${escape(fkey)}" placeholder="Add a comment for this finding (exported in the report)…">${escape(fr.note || '')}</textarea>
+      <textarea class="finding-note ${needsComment ? 'needs-comment' : ''}" data-field="${escape(fkey)}" placeholder="${needsComment ? 'Required: explain why this is a false positive before continuing…' : 'Add a comment for this finding (exported in the report)…'}">${escape(fr.note || '')}</textarea>
     </li>`}).join('')}</ul>`
 }
 
