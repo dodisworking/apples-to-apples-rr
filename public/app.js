@@ -1540,6 +1540,11 @@ function exportFeedback() {
     const d = (m.diffs || []).find(x => (x.field || '') === f.fieldKey)
     const reviews = state.reviews?.[f.suiteKey] || {}
     const fr = (typeof reviews === 'object' && reviews[f.fieldKey]) || {}
+    // Standardization provenance (Special mode only): did the two independent AI
+    // passes agree on this tenant, and if not, on which fields? A disagreement on
+    // THIS finding's field is the strongest signal that the model mis-standardized.
+    const std = m.client?._standardization || null
+    const stdFieldDispute = std?.fields?.find(x => x.field === f.fieldKey) || null
     return {
       suite: m.suite || f.suiteKey || null,
       tenant: m.argus?.name || m.client?.name || '',
@@ -1548,11 +1553,38 @@ function exportFeedback() {
       severity: f.severity,
       argusValue: f.argusValue,
       clientValue: f.clientValue,
-      rule: d?.rule || null,
       aiFlag: f.isMissing ? 'tenant_presence' : 'discrepancy',
-      aiVerifier: d?.aiVerifier
-        ? { verdict: d.aiVerifier.verdict, confidence: d.aiVerifier.confidence, reasoning: d.aiVerifier.reasoning }
-        : null,
+      // ── How the system found this, end to end — so the feedback doc is
+      //    actionable for correcting the standardization model generically. ──
+      detection: {
+        // 1) Deterministic reconcile: the rule that fired + a plain-English
+        //    write-up of what it means and the likely root causes.
+        rule: d?.rule || (f.isMissing ? 'Tenant present on one roll but not matched on the other' : null),
+        explain: d?.explain || null,
+        stepReconciled: d?.stepReconciled || false,
+        // 2) Second-pass AI verifier (Haiku): its real-vs-false-positive call,
+        //    with the unit-translation math it used.
+        aiVerifier: d?.aiVerifier
+          ? {
+              verdict: d.aiVerifier.verdict,
+              confidence: d.aiVerifier.confidence,
+              reasoning: d.aiVerifier.reasoning,
+              argusLocation: d.aiVerifier.argusLocation || null,
+              clientLocation: d.aiVerifier.clientLocation || null,
+            }
+          : null,
+        // 3) Standardization stability (Special mode): whether the two passes
+        //    agreed, and the disagreeing values on this exact field if not.
+        standardization: std
+          ? {
+              status: std.status,                       // 'agreed' | 'tiebroken'
+              onlyFoundBy: std.onlyFoundBy || null,     // 'passA' | 'passB' | null
+              fieldDisagreement: stdFieldDispute
+                ? { passA: stdFieldDispute.passA, passB: stdFieldDispute.passB }
+                : null,
+            }
+          : null,
+      },
       reviewerVerdict: v === 'good' ? 'confirmed_real_discrepancy' : v === 'bad' ? 'false_positive' : 'undecided',
       aiWasCorrect: v === 'good' ? true : v === 'bad' ? false : null,
       reviewerComment: fr.note || '',
@@ -1562,10 +1594,11 @@ function exportFeedback() {
   const rejected  = findings.filter(f => f.reviewerVerdict === 'false_positive').length
   const undecided = findings.filter(f => f.reviewerVerdict === 'undecided').length
   const out = {
-    schema: 'a2a-review-feedback/v1',
+    schema: 'a2a-review-feedback/v2',
     property: state.result?.property || 'Property',
     generatedAt: new Date().toISOString(),
     mode: state.mode,
+    strategy: state.strategy || 'standard',
     files: { argus: state.argusFile?.name || null, client: state.clientFile?.name || null },
     summary: {
       totalFindings: findings.length,
