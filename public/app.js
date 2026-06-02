@@ -1176,6 +1176,10 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   const fkey = li.dataset.field
   log('foot.click', { fkey, target: e.target.tagName + '.' + (e.target.className || '').slice(0, 40) })
 
+  // Clicking inside the note field must NOT re-render the foot (it would blow
+  // away focus mid-typing) — let the textarea handle its own input.
+  if (e.target.closest('.finding-note')) return
+
   // Verdict buttons get their own behavior (don't trigger the select)
   const btn = e.target.closest('.finding-btn')
   if (btn && btn.dataset.verdict) {
@@ -1229,6 +1233,25 @@ document.getElementById('pdfReviewerFoot')?.addEventListener('click', (e) => {
   } else {
     log('foot.select.noActiveIdx', {})
   }
+})
+
+// Persist a comment typed on a cross-reference foot card into the same
+// per-field review store the drawer uses, so it exports with the report.
+document.getElementById('pdfReviewerFoot')?.addEventListener('input', (e) => {
+  const ta = e.target.closest('.finding-note')
+  if (!ta) return
+  if (state.activeIdx < 0) return
+  const fkey = ta.dataset.field
+  const m = state.result.matches[state.activeIdx]
+  const key = m.suiteKey || m.suite
+  state.reviews[key] = state.reviews[key] || {}
+  if ('verdict' in state.reviews[key]) {
+    const legacy = state.reviews[key]
+    state.reviews[key] = { _tenantNote: legacy.note || '', __legacyVerdict: legacy.verdict }
+  }
+  state.reviews[key][fkey] = state.reviews[key][fkey] || { verdict: null, note: '' }
+  state.reviews[key][fkey].note = ta.value
+  persistLearnings()
 })
 
 // Global zoom kept for back-compat with the existing pdfZoom references
@@ -1436,6 +1459,7 @@ function renderReviewerFoot(m) {
         <button class="finding-btn bad  ${v === 'bad'  ? 'active' : ''}" data-verdict="bad"  title="Reject as false positive">👎 Reject</button>
         <button class="finding-btn clear" data-verdict="none">↺ Clear</button>
       </div>
+      <textarea class="finding-note" data-field="${escape(fkey)}" placeholder="Add a comment for this finding (exported in the report)…">${escape(fr.note || '')}</textarea>
     </li>`}).join('')}</ul>`
 }
 
