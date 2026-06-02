@@ -113,8 +113,9 @@ app.post('/api/compare', async (req, res) => {
               mode === 'deluxe' ? 'claude-opus-4-7' :
               'claude-sonnet-4-6'
     // "Special" = ensemble standardization (two independent passes + tie-breaker).
-    // Only offered on the Regular (Sonnet) tier.
-    const special = strategy === 'special' && (mode || 'regular') === 'regular'
+    // Offered on Regular (Sonnet) and Dumb (Haiku — for cheap UX testing); not
+    // on Deluxe, where a 2-3x Opus ensemble would be needlessly expensive.
+    const special = strategy === 'special' && (mode === 'regular' || mode === 'dumb')
     console.log(`[compare] mode=${mode || 'regular'} strategy=${special ? 'special' : 'standard'} model=${m} argus=${argus.name} client=${client.name}`)
 
     // ── Step 1: parse Argus ──────────────────────────────

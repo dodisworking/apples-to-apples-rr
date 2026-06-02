@@ -61,16 +61,20 @@ function syncStrategyUI() {
   const specialOpt = document.getElementById('stratSpecialOpt')
   const specialInput = document.querySelector('input[name=strategy][value=special]')
   const standardInput = document.querySelector('input[name=strategy][value=standard]')
-  const allowed = mode === 'regular'
+  const allowed = mode === 'regular' || mode === 'dumb'
   if (specialInput) specialInput.disabled = !allowed
   if (specialOpt) specialOpt.classList.toggle('disabled', !allowed)
   if (!allowed && specialInput?.checked && standardInput) standardInput.checked = true
 }
 document.addEventListener('change', (e) => {
   if (e.target?.name === 'mode') syncStrategyUI()
+  // Picking Special on the unsupported tier (Deluxe) snaps the tier to Regular.
   if (e.target?.name === 'strategy' && e.target.value === 'special') {
-    const regular = document.querySelector('input[name=mode][value=regular]')
-    if (regular && !regular.checked) { regular.checked = true; syncStrategyUI() }
+    const mode = document.querySelector('input[name=mode]:checked')?.value
+    if (mode !== 'regular' && mode !== 'dumb') {
+      const regular = document.querySelector('input[name=mode][value=regular]')
+      if (regular) { regular.checked = true; syncStrategyUI() }
+    }
   }
 })
 syncStrategyUI()
@@ -155,8 +159,8 @@ $('#goDetect').addEventListener('click', async () => {
 async function startAnalysis() {
   state.mode = document.querySelector('input[name=mode]:checked')?.value || 'regular'
   state.strategy = document.querySelector('input[name=strategy]:checked')?.value || 'standard'
-  // Special (ensemble) is Regular-tier only — fall back to standard otherwise.
-  if (state.strategy === 'special' && state.mode !== 'regular') state.strategy = 'standard'
+  // Special (ensemble) runs on Regular and Dumb — fall back to standard on Deluxe.
+  if (state.strategy === 'special' && !(state.mode === 'regular' || state.mode === 'dumb')) state.strategy = 'standard'
   showStage('stage-process')
   updateProgress({ stage: 'starting', pct: 3, msg: 'Heating up…' })
   startTimers()
