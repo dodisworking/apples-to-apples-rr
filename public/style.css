@@ -61,6 +61,14 @@ svg[shape-rendering="crispEdges"] { image-rendering: pixelated; }
 .mode-opt small { color: #9ca3af; font-size: 10px; }
 .mode-opt:has(input:checked) small { color: #c2410c; }
 
+/* Strategy selector (Standard vs Special) sits beside the model tier. */
+.topbar-right { display: inline-flex; align-items: center; gap: 10px; }
+.strat-select:has(input:checked[value=special]) { border-color: #c7d2fe; }
+.strat-select .mode-opt:has(input:checked) { background: #e0e7ff; color: #3730a3; }
+.strat-select .mode-opt:has(input:checked) small { color: #4f46e5; }
+.mode-opt.disabled { opacity: .4; cursor: not-allowed; }
+.mode-opt.disabled:hover { background: transparent; }
+
 /* ─── Stages ────────────────────────────────────────────── */
 .stage { display: none; animation: fadeIn .35s ease-out; }
 .stage.active { display: block; }

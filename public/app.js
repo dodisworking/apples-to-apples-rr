@@ -51,6 +51,30 @@ window.addEventListener('unhandledrejection', (e) => {
 })
 log('boot', { ua: navigator.userAgent.slice(0, 80), date: new Date().toISOString() })
 
+// ═══ Model tier ⇄ strategy coupling ═══════════════════
+// "Special" (ensemble) only runs on the Regular tier. Keep the two selectors
+// consistent: picking Special snaps the tier to Regular; picking Dumb/Deluxe
+// snaps strategy back to Standard. The Special option is visually disabled
+// whenever the tier isn't Regular so the constraint is obvious.
+function syncStrategyUI() {
+  const mode = document.querySelector('input[name=mode]:checked')?.value || 'regular'
+  const specialOpt = document.getElementById('stratSpecialOpt')
+  const specialInput = document.querySelector('input[name=strategy][value=special]')
+  const standardInput = document.querySelector('input[name=strategy][value=standard]')
+  const allowed = mode === 'regular'
+  if (specialInput) specialInput.disabled = !allowed
+  if (specialOpt) specialOpt.classList.toggle('disabled', !allowed)
+  if (!allowed && specialInput?.checked && standardInput) standardInput.checked = true
+}
+document.addEventListener('change', (e) => {
+  if (e.target?.name === 'mode') syncStrategyUI()
+  if (e.target?.name === 'strategy' && e.target.value === 'special') {
+    const regular = document.querySelector('input[name=mode][value=regular]')
+    if (regular && !regular.checked) { regular.checked = true; syncStrategyUI() }
+  }
+})
+syncStrategyUI()
+
 // ═══ Stage routing ════════════════════════════════════
 function showStage(id) {
   document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'))
@@ -130,6 +154,9 @@ $('#goDetect').addEventListener('click', async () => {
 
 async function startAnalysis() {
   state.mode = document.querySelector('input[name=mode]:checked')?.value || 'regular'
+  state.strategy = document.querySelector('input[name=strategy]:checked')?.value || 'standard'
+  // Special (ensemble) is Regular-tier only — fall back to standard otherwise.
+  if (state.strategy === 'special' && state.mode !== 'regular') state.strategy = 'standard'
   showStage('stage-process')
   updateProgress({ stage: 'starting', pct: 3, msg: 'Heating up…' })
   startTimers()
@@ -142,6 +169,7 @@ async function startAnalysis() {
         argus:  { name: state.argusFile.name,  base64: argusB64  },
         client: { name: state.clientFile.name, base64: clientB64 },
         mode: state.mode,
+        strategy: state.strategy,
       }),
       signal: state.abort.signal,
     })

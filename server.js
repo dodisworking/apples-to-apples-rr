@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { parseFile } from './lib/parsers.js'
 import { detect, decideRoles } from './lib/detect.js'
 import { parseArgusFromSheets } from './lib/argus.js'
-import { normalizeClient } from './lib/client.js'
+import { normalizeClient, normalizeClientEnsemble } from './lib/client.js'
 import { reconcile, compareTenantsExternal } from './lib/reconcile.js'
 import { verifyFindings, reunifyOrphans } from './lib/verifier.js'
 import { buildExcel } from './lib/excel.js'
@@ -107,12 +107,15 @@ app.post('/api/compare', async (req, res) => {
   }
 
   try {
-    const { argus, client, mode } = req.body || {}
+    const { argus, client, mode, strategy } = req.body || {}
     if (!argus?.base64 || !client?.base64) throw new Error('argus and client files required')
     const m = mode === 'dumb' ? 'claude-haiku-4-5' :
               mode === 'deluxe' ? 'claude-opus-4-7' :
               'claude-sonnet-4-6'
-    console.log(`[compare] mode=${mode || 'regular'} model=${m} argus=${argus.name} client=${client.name}`)
+    // "Special" = ensemble standardization (two independent passes + tie-breaker).
+    // Only offered on the Regular (Sonnet) tier.
+    const special = strategy === 'special' && (mode || 'regular') === 'regular'
+    console.log(`[compare] mode=${mode || 'regular'} strategy=${special ? 'special' : 'standard'} model=${m} argus=${argus.name} client=${client.name}`)
 
     // ── Step 1: parse Argus ──────────────────────────────
     emit('progress', { stage: 'parsing-argus', pct: 8, msg: 'Parsing Argus rent roll…' })
@@ -135,9 +138,24 @@ app.post('/api/compare', async (req, res) => {
     // the user sees the elapsed counter tick and doesn't think it hung.
     const clientNormalized = await withHeartbeat(
       'normalizing', 38,
-      '🤖 Claude is reading the client rent roll — dense PDFs take 20-60s…',
-      () => normalizeClient({ parsed: parsedClient, filename: client.name, model: m })
+      special
+        ? '🔬 Special mode — running two independent extractions to cross-check the client rent roll…'
+        : '🤖 Claude is reading the client rent roll — dense PDFs take 20-60s…',
+      () => special
+        ? normalizeClientEnsemble({
+            parsed: parsedClient, filename: client.name, model: m,
+            onStage: (s, info) => {
+              if (s === 'tiebreak') {
+                emit('progress', { stage: 'normalizing', pct: 46, msg: `🔬 Two passes disagreed on ${info?.count || 'some'} tenant(s) — running a tie-breaker pass…` })
+              }
+            },
+          })
+        : normalizeClient({ parsed: parsedClient, filename: client.name, model: m })
     )
+    if (special && clientNormalized._ensemble) {
+      const e = clientNormalized._ensemble
+      emit('progress', { stage: 'normalizing-done', pct: 50, msg: `✓ Cross-check: ${e.agreed} tenant(s) matched on both passes · ${e.disputed} reconciled by tie-breaker` })
+    }
     console.log(`[compare] client: ${clientNormalized.tenants.length} tenants, reported ${clientNormalized.topLevelTotalSF || '?'} SF`)
 
     // ── Steps 4-8: walk the spec checks in order ─────────

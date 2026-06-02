@@ -56,6 +56,16 @@
             <span>🧀 <b>Deluxe</b><small>Opus</small></span>
           </label>
         </div>
+        <div class="mode-select strat-select" role="radiogroup" aria-label="Strategy">
+          <label class="mode-opt">
+            <input type="radio" name="strategy" value="standard" checked>
+            <span>⚡ <b>Standard</b><small>1 pass</small></span>
+          </label>
+          <label class="mode-opt" id="stratSpecialOpt" title="Standardize the client RR twice independently and tie-break disagreements (Regular tier only). Slower, fewer false positives.">
+            <input type="radio" name="strategy" value="special">
+            <span>🔬 <b>Special</b><small>3× check</small></span>
+          </label>
+        </div>
       </div>
     </header>
 
