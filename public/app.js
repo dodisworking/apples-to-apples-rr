@@ -1762,14 +1762,22 @@ function matchSummary(m) {
 
 function renderReviewerFoot(m) {
   if (m.flags?.clean) return `<div class="empty-foot">✓ Every field matches on this tenant.</div>`
-  if (m.flags?.argusOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.argus?.name)}</b> appears in Argus but no match was found in the client RR.</div>`
-  if (m.flags?.clientOnly) return `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.client?.name)}</b> appears in the client RR but no match was found in Argus.</div>`
   const suiteKey = m.suiteKey || m.suite || ''
   const reviews = state.reviews[suiteKey] || {}
+  // One-sided tenants (present on only one roll) are real findings too — show a
+  // context banner explaining we couldn't match it to the other side, then fall
+  // through to render the normal finding card (with confirm/reject + comment) so
+  // the reviewer can decide it like any other finding.
+  let banner = ''
+  if (m.flags?.argusOnly) {
+    banner = `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.argus?.name)}</b> was found in <b>Argus</b> but we could not match it to anything in the client RR (the client side is empty →). Confirm if it's genuinely missing, or reject if it's actually present under a different name/suite.</div>`
+  } else if (m.flags?.clientOnly) {
+    banner = `<div class="empty-foot" style="color:#c2410c">⚠ Tenant <b>${escape(m.client?.name)}</b> was found in the <b>client RR</b> but we could not match it to anything in Argus (the Argus side is empty ←). Confirm if it's genuinely missing, or reject if it's actually present under a different name/suite.</div>`
+  }
   // Per-finding card with INLINE verdict buttons — confirm/deny right here,
   // no need to bounce back to the drawer. Clicking a card sets it as the
   // active finding (selector + highlight update).
-  return `<ul class="diff-list">${(m.diffs || []).filter(d => !d.suppressed).map((d, di) => {
+  return banner + `<ul class="diff-list">${(m.diffs || []).filter(d => !d.suppressed).map((d, di) => {
     const fkey = d.field || ('idx' + di)
     const fr = (reviews && typeof reviews === 'object' && reviews[fkey]) || {}
     const v = fr.verdict || null
