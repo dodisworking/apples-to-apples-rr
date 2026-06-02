@@ -2707,7 +2707,13 @@ function renderXlsxRow(host, tenant, match) {
 $('#downloadXlsx').addEventListener('click', async () => {
   const btn = $('#downloadXlsx')
   const original = btn.textContent
-  const hasReviews = Object.values(state.reviews || {}).some(r => r?.verdict || r?.note)
+  // Reviews are keyed by suite, then per-field: { suiteKey: { fieldKey: { verdict, note } } }.
+  // Detect a verdict/note at EITHER the legacy suite level or the per-field level.
+  const hasReviews = Object.values(state.reviews || {}).some(suite => {
+    if (!suite || typeof suite !== 'object') return false
+    if (suite.verdict || suite.note) return true   // legacy tenant-level shape
+    return Object.values(suite).some(f => f && typeof f === 'object' && (f.verdict || f.note))
+  })
   try {
     if (hasReviews) {
       btn.disabled = true; btn.textContent = '📝 Embedding your reviews…'
