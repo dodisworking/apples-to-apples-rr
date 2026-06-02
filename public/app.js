@@ -277,6 +277,9 @@ function onComplete(payload) {
   showStage('stage-review')
   // Cleanup pdf cache for new run
   pdfCache.clear()
+  // Land the reviewer straight into the guided suite-by-suite cross-reference
+  // (the side-by-side table stays behind it as an overview / fallback).
+  setTimeout(() => { try { openGuided(0) } catch (e) { log('openGuided.error', { msg: String(e) }) } }, 50)
 }
 
 function renderReview() {
@@ -846,6 +849,8 @@ let _persistTimer = null
 function persistLearnings() {
   // Re-render the sidebar immediately so verdict badges update in real time
   if (document.getElementById('findingsSidebarList')) renderFindingsSidebar()
+  // Keep the guided bar's progress + Next/Export gating in sync with verdicts.
+  if (state.guided?.active) refreshGuided()
   clearTimeout(_persistTimer)
   _persistTimer = setTimeout(async () => {
     try {
@@ -1034,8 +1039,8 @@ function renderDrawerBody(m) {
 }
 
 // ═══ Full-screen PDF Cross-Reference Reviewer ════════
-$('#openPdfReviewer').addEventListener('click', () => openPdfReviewer(0))
-$('#pdfReviewerClose').addEventListener('click', () => $('#pdfReviewer').setAttribute('aria-hidden', 'true'))
+$('#openPdfReviewer').addEventListener('click', () => openGuided(0))
+$('#pdfReviewerClose').addEventListener('click', () => closeReviewer())
 $('#pdfPrev').addEventListener('click', () => stepReviewer(-1))
 $('#pdfNext').addEventListener('click', () => stepReviewer(+1))
 $('#pdfMatchSelector').addEventListener('change', (e) => {
@@ -1272,14 +1277,25 @@ function setPdfZoom(z) {
 document.addEventListener('keydown', (e) => {
   if ($('#pdfReviewer').getAttribute('aria-hidden') !== 'false') return
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  if (e.key === 'Escape') $('#pdfReviewer').setAttribute('aria-hidden', 'true')
+  if (e.key === 'Escape') closeReviewer()
   else if (e.key === 'j' || e.key === 'ArrowDown' || e.key === 'ArrowRight') stepReviewer(+1)
   else if (e.key === 'k' || e.key === 'ArrowUp'   || e.key === 'ArrowLeft')  stepReviewer(-1)
 })
 
 function stepReviewer(delta) {
-  // Walk the FLAT findings list (one step per finding, not per tenant) so the
-  // cell-level highlight steps cleanly through every flagged value.
+  // In guided mode, arrows move the highlight BETWEEN the findings of the
+  // CURRENT suite only (so the reviewer can eyeball each flagged value) — they
+  // never jump suites, which would bypass the confirm/reject gate.
+  if (state.guided?.active) {
+    const sf = suiteFindings(state.activeIdx)
+    if (!sf.length) return
+    let cur = sf.findIndex(f => f.fieldKey === state.activeFieldKey)
+    if (cur < 0) cur = 0
+    const f = sf[(cur + delta + sf.length) % sf.length]
+    selectGuidedFinding(f.fieldKey)
+    return
+  }
+  // Free mode: walk the FLAT findings list (one step per finding).
   const findings = buildFindingsList()
   if (!findings.length) return
   let cur = findings.findIndex(f => f.matchIdx === state.activeIdx && f.fieldKey === state.activeFieldKey)
@@ -1290,6 +1306,23 @@ function stepReviewer(delta) {
   openPdfReviewer(f.matchIdx, f.fieldKey)
 }
 
+// Set the active finding within the current guided suite and re-pinpoint both
+// sides (no suite change, no selector rebuild).
+function selectGuidedFinding(fkey) {
+  if (state.activeIdx < 0) return
+  state.activeFieldKey = fkey
+  const m = state.result.matches[state.activeIdx]
+  $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+  Promise.all([
+    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants),
+    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants),
+  ]).catch(e => log('selectGuidedFinding.renderError', { msg: String(e) }))
+  requestAnimationFrame(() => {
+    document.querySelector(`#pdfReviewerFoot li[data-field="${cssEscape(fkey)}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
 // Which matches show up in the reviewer's selector. Defaults to all non-clean rows.
 function reviewerList() {
   return (state.result.matches || [])
@@ -1297,6 +1330,200 @@ function reviewerList() {
     .filter(({ m }) => !m.flags?.clean)   // skip clean matches — nothing to review
     .map(({ i }) => i)
 }
+
+// ═══ Guided suite-by-suite review ═══════════════════════
+// The primary reviewer experience: walk every flagged tenant IN ORDER, one
+// suite at a time, in the cross-reference (apple↔pear) layout. The reviewer
+// must confirm 👍 or reject 👎 EVERY finding on a suite before "Next suite"
+// unlocks — nothing can be skipped. When every finding across every suite is
+// decided, "Export Result" produces a feedback file (what the AI got right vs.
+// wrong, plus the reviewer's comments) to hand back for tuning the model.
+state.guided = { active: false, pos: 0, order: [] }
+
+// Resolve a finding's verdict from the per-field (or legacy per-tenant) store.
+function findingVerdict(f) {
+  const r = state.reviews?.[f.suiteKey]
+  if (!r || typeof r !== 'object') return null
+  if ('verdict' in r && !Object.values(r).some(v => v && typeof v === 'object' && 'verdict' in v)) return r.verdict
+  return r[f.fieldKey]?.verdict || null
+}
+// Ordered list of matchIdx that carry at least one finding (skips clean tenants).
+function guidedOrder() {
+  const order = [], seen = new Set()
+  for (const f of buildFindingsList()) {
+    if (!seen.has(f.matchIdx)) { seen.add(f.matchIdx); order.push(f.matchIdx) }
+  }
+  return order
+}
+function suiteFindings(matchIdx) { return buildFindingsList().filter(f => f.matchIdx === matchIdx) }
+function suiteDecided(matchIdx) { return suiteFindings(matchIdx).every(f => !!findingVerdict(f)) }
+function allFindingsDecided() { return buildFindingsList().every(f => !!findingVerdict(f)) }
+
+async function openGuided(pos = 0) {
+  const order = guidedOrder()
+  state.guided = { active: true, pos: Math.max(0, Math.min(pos, Math.max(0, order.length - 1))), order }
+  $('#pdfReviewer').setAttribute('aria-hidden', 'false')
+  $('#pdfReviewer').classList.add('guided-mode')
+  $('#guidedBar').hidden = false
+  wirePdfDivider()
+
+  if (!order.length) {
+    $('#pdfReviewerFoot').innerHTML = `<div class="empty-foot">✓ Every tenant matched cleanly — no findings to review. You can export an empty result for the record.</div>`
+    $('#pdfRevArgus').innerHTML = $('#pdfRevClient').innerHTML = '<div style="padding:20px;color:#9ca3af">No discrepancies to show.</div>'
+    refreshGuided()
+    return
+  }
+
+  const matchIdx = order[state.guided.pos]
+  const first = suiteFindings(matchIdx)[0]
+  state.activeIdx = matchIdx
+  state.activeFieldKey = first?.fieldKey || null
+  const m = state.result.matches[matchIdx]
+  $('#pdfReviewerFoot').innerHTML = renderReviewerFoot(m)
+  refreshGuided()
+
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  await Promise.all([
+    renderReviewerSide('argus',  $('#pdfRevArgus'),  m, state.result.argusTenants),
+    renderReviewerSide('client', $('#pdfRevClient'), m, state.result.clientTenants),
+  ])
+}
+
+// Recompute the guided bar: progress, suite label, and gating of Next/Export.
+function refreshGuided() {
+  if (!state.guided?.active) return
+  const order = state.guided.order
+  const all = buildFindingsList()
+  const total = all.length
+  const decided = all.filter(f => !!findingVerdict(f)).length
+  const pos = state.guided.pos
+
+  $('#guidedCount').textContent = `${decided} / ${total} findings reviewed`
+  $('#guidedFill').style.width = total ? Math.round(decided / total * 100) + '%' : '100%'
+
+  const prevBtn = $('#guidedPrev'), nextBtn = $('#guidedNext'), exportBtn = $('#guidedExport')
+  const hint = $('#guidedHint')
+
+  if (!order.length) {
+    $('#guidedSuiteLabel').textContent = 'No findings'
+    prevBtn.disabled = true
+    nextBtn.hidden = true
+    exportBtn.hidden = false
+    exportBtn.disabled = false
+    exportBtn.textContent = '✅ Export Result'
+    if (hint) hint.textContent = 'Nothing flagged — export the clean result.'
+    return
+  }
+
+  const matchIdx = order[pos]
+  const suiteOpen = suiteFindings(matchIdx).filter(f => !findingVerdict(f)).length
+  const suiteOk = suiteOpen === 0
+  const isLast = pos >= order.length - 1
+  const everything = allFindingsDecided()
+
+  $('#guidedSuiteLabel').textContent = `Suite ${pos + 1} / ${order.length}`
+  prevBtn.disabled = pos <= 0
+
+  // Next: only on non-final suites, only once this suite is fully decided.
+  nextBtn.hidden = isLast
+  nextBtn.disabled = !suiteOk
+  nextBtn.textContent = suiteOk ? 'Next suite →' : `Decide ${suiteOpen} more →`
+
+  // Export: surfaces on the final suite, enabled only when ALL suites are done.
+  exportBtn.hidden = !isLast
+  exportBtn.disabled = !everything
+  exportBtn.textContent = everything ? '✅ Export Result' : `Decide ${total - decided} more to export`
+
+  if (hint) {
+    hint.textContent = suiteOk
+      ? (isLast
+          ? (everything ? 'All findings reviewed — export your result.' : `Go back and finish the ${total - decided} skipped finding(s) to export.`)
+          : 'Suite complete — continue to the next one.')
+      : `Confirm 👍 or reject 👎 the ${suiteOpen} remaining finding(s) on this suite to continue.`
+  }
+}
+
+function guidedNext() {
+  if (!state.guided?.active) return
+  const order = state.guided.order
+  if (!order.length) return
+  if (!suiteDecided(order[state.guided.pos])) return
+  if (state.guided.pos < order.length - 1) openGuided(state.guided.pos + 1)
+}
+function guidedPrev() {
+  if (!state.guided?.active) return
+  if (state.guided.pos > 0) openGuided(state.guided.pos - 1)
+}
+function closeReviewer() {
+  $('#pdfReviewer').setAttribute('aria-hidden', 'true')
+  $('#pdfReviewer').classList.remove('guided-mode')
+  $('#guidedBar').hidden = true
+  state.guided.active = false
+}
+
+// Build and download the reviewer-feedback file. This is the artifact the
+// reviewer sends back: for every AI finding it records whether the human
+// confirmed it (AI was right) or rejected it (false positive), plus comments.
+function exportFeedback() {
+  const all = buildFindingsList()
+  const findings = all.map(f => {
+    const v = findingVerdict(f)   // 'good' | 'bad' | null
+    const m = state.result.matches[f.matchIdx]
+    const d = (m.diffs || []).find(x => (x.field || '') === f.fieldKey)
+    const reviews = state.reviews?.[f.suiteKey] || {}
+    const fr = (typeof reviews === 'object' && reviews[f.fieldKey]) || {}
+    return {
+      suite: m.suite || f.suiteKey || null,
+      tenant: m.argus?.name || m.client?.name || '',
+      field: f.fieldKey,
+      label: f.label,
+      severity: f.severity,
+      argusValue: f.argusValue,
+      clientValue: f.clientValue,
+      rule: d?.rule || null,
+      aiFlag: f.isMissing ? 'tenant_presence' : 'discrepancy',
+      aiVerifier: d?.aiVerifier
+        ? { verdict: d.aiVerifier.verdict, confidence: d.aiVerifier.confidence, reasoning: d.aiVerifier.reasoning }
+        : null,
+      reviewerVerdict: v === 'good' ? 'confirmed_real_discrepancy' : v === 'bad' ? 'false_positive' : 'undecided',
+      aiWasCorrect: v === 'good' ? true : v === 'bad' ? false : null,
+      reviewerComment: fr.note || '',
+    }
+  })
+  const confirmed = findings.filter(f => f.reviewerVerdict === 'confirmed_real_discrepancy').length
+  const rejected  = findings.filter(f => f.reviewerVerdict === 'false_positive').length
+  const undecided = findings.filter(f => f.reviewerVerdict === 'undecided').length
+  const out = {
+    schema: 'a2a-review-feedback/v1',
+    property: state.result?.property || 'Property',
+    generatedAt: new Date().toISOString(),
+    mode: state.mode,
+    files: { argus: state.argusFile?.name || null, client: state.clientFile?.name || null },
+    summary: {
+      totalFindings: findings.length,
+      confirmedRealDiscrepancies: confirmed,
+      falsePositives: rejected,
+      undecided,
+      aiPrecision: (confirmed + rejected) ? +(confirmed / (confirmed + rejected)).toFixed(4) : null,
+    },
+    findings,
+  }
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' })
+  const safe = (out.property || 'property').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'property'
+  const name = `${safe}-review-feedback-${new Date().toISOString().slice(0, 10)}.json`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  log('exportFeedback', { findings: findings.length, confirmed, rejected, undecided })
+
+  // Also offer the Excel (with reviews) so the handover bundle is complete.
+  try { $('#downloadXlsx')?.click() } catch (e) { /* non-fatal */ }
+}
+
+$('#guidedPrev')?.addEventListener('click', guidedPrev)
+$('#guidedNext')?.addEventListener('click', guidedNext)
+$('#guidedExport')?.addEventListener('click', exportFeedback)
 
 // Pear view toggle — "Original" or "As Apple" (Argus template layout)
 state.pearView = 'original'
@@ -1376,6 +1603,11 @@ function wirePdfDivider() {
 // tenants (argus-only / client-only) we still highlight the tenant row.
 async function openPdfReviewer(idxOrFinding, fieldKey = null) {
   log('openPdfReviewer.start', { idxOrFinding, fieldKey })
+  // Free (jump-anywhere) mode — make sure guided gating is off so its bar and
+  // hooks don't fight the flat-finding selector.
+  state.guided.active = false
+  $('#pdfReviewer').classList.remove('guided-mode')
+  $('#guidedBar').hidden = true
   const findings = buildFindingsList()
   if (!findings.length) { alert('Every tenant matched cleanly — nothing to review.'); return }
 

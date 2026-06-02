@@ -290,6 +290,22 @@
           <button id="pdfReviewerClose" class="btn ghost btn-sm">✕ Close</button>
         </div>
       </div>
+
+      <!-- Guided suite-by-suite review bar (sequential reviewer flow) -->
+      <div class="guided-bar" id="guidedBar" hidden>
+        <button id="guidedPrev" class="btn ghost btn-sm" disabled>← Prev suite</button>
+        <div class="guided-progress">
+          <div class="guided-progress-top">
+            <span class="guided-suite-label" id="guidedSuiteLabel">Suite 1 / 1</span>
+            <span class="guided-count" id="guidedCount">0 / 0 findings reviewed</span>
+          </div>
+          <div class="guided-bar-track"><div class="guided-bar-fill" id="guidedFill"></div></div>
+          <div class="guided-hint" id="guidedHint">Confirm 👍 or reject 👎 every finding below to unlock the next suite.</div>
+        </div>
+        <button id="guidedNext" class="btn primary btn-sm" disabled>Next suite →</button>
+        <button id="guidedExport" class="btn primary btn-sm" hidden disabled>✅ Export Result</button>
+      </div>
+
       <div class="pdf-reviewer-body" id="pdfReviewerBody">
         <div class="pdf-reviewer-side pdf-reviewer-apple" id="pdfSideApple">
           <div class="pdf-reviewer-side-label" data-focus="apple" title="Drag the divider to resize · or click to make this side bigger">
