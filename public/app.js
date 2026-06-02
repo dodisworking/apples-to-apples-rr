@@ -1479,7 +1479,14 @@ function refreshGuided() {
   const isLast = pos >= order.length - 1
   const everything = allFindingsDecided()
 
-  $('#guidedSuiteLabel').textContent = `Suite ${pos + 1} / ${order.length}`
+  // Always make it crystal-clear WHAT is being reviewed right now: suite
+  // position, the suite/unit number, and the tenant name.
+  const cm = state.result.matches[matchIdx]
+  const suiteNo = cm?.suite ? `Suite ${cm.suite}` : 'Suite —'
+  const tenantNm = cm?.argus?.name || cm?.client?.name || '(unnamed tenant)'
+  const sideTag = cm?.flags?.argusOnly ? ' · 🍎 Argus only' : cm?.flags?.clientOnly ? ' · 🍐 Client only' : ''
+  $('#guidedSuiteLabel').innerHTML =
+    `<span class="gsl-pos">${pos + 1} / ${order.length}</span> <span class="gsl-suite">${escape(suiteNo)}</span> · <span class="gsl-tenant">${escape(tenantNm)}</span><span class="gsl-side">${sideTag}</span>`
   prevBtn.disabled = pos <= 0
 
   // Next: only on non-final suites, only once this suite is fully complete.
@@ -1813,8 +1820,12 @@ async function renderReviewerSide(side, host, match, tenants) {
   host.innerHTML = '<div style="padding:20px;color:#9ca3af">Loading…</div>'
   const tenant = side === 'argus' ? match.argus : match.client
   if (!tenant) {
+    // Tenant is present on only the OTHER roll. Don't dead-end with a blank
+    // message — render the ENTIRE document for this side so the reviewer can
+    // scroll through and visually confirm the tenant really isn't here before
+    // confirming the "missing" finding.
     log('renderReviewerSide.noTenant', { side })
-    host.innerHTML = `<div style="padding:20px;color:#9ca3af">Tenant not present on this side.</div>`
+    await renderFullDocSide(side, host, match)
     return
   }
 
@@ -1898,6 +1909,56 @@ async function renderReviewerSide(side, host, match, tenants) {
       log('renderReviewerSide.done.argusCard', { side, ms: Math.round(performance.now() - t0) })
     }
   }
+}
+
+// Render the WHOLE document for one side (no tenant highlight). Used when a
+// tenant exists on only the other roll: the reviewer needs to eyeball the full
+// rent roll on this side to confirm the tenant is genuinely absent.
+async function renderFullDocSide(side, host, match) {
+  const missingName = (side === 'argus' ? (match.client?.name) : (match.argus?.name)) || match.suite || 'this tenant'
+  const sideLabel = side === 'argus' ? 'Argus' : 'client'
+  const note = `<div class="fulldoc-note">🔎 <b>${escape(missingName)}</b> was not matched in the ${sideLabel} rent roll. Showing the entire ${sideLabel} document — scroll to verify it's truly absent.</div>`
+  host.innerHTML = '<div style="padding:20px;color:#9ca3af">Loading full document…</div>'
+
+  let entry
+  try { entry = await loadPdfDoc(side) }
+  catch (e) { log('renderFullDocSide.loadPdfDoc.error', { side, msg: String(e) }); entry = null }
+
+  if (entry?.type === 'pdf') {
+    host.innerHTML = note
+    const wrap = document.createElement('div')
+    wrap.className = 'fulldoc-pages'
+    host.appendChild(wrap)
+    const pdfDoc = entry.pdfDoc
+    const hostWidth = Math.max(200, (host.clientWidth || 600) - 24)
+    const sideZoom = side === 'argus' ? (state.zoomArgus || 1.0) : (state.zoomClient || 1.0)
+    for (let p = 1; p <= pdfDoc.numPages; p++) {
+      const page = await pdfDoc.getPage(p)
+      const baseVp = page.getViewport({ scale: 1.0 })
+      const scale = (hostWidth / baseVp.width) * sideZoom
+      const vp = page.getViewport({ scale })
+      const canvas = document.createElement('canvas')
+      canvas.width = vp.width; canvas.height = vp.height
+      canvas.style.cssText = 'display:block;margin:0 auto 8px;box-shadow:0 1px 4px rgba(0,0,0,.12)'
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise
+      wrap.appendChild(canvas)
+    }
+    log('renderFullDocSide.done.pdf', { side, pages: pdfDoc.numPages })
+    return
+  }
+
+  // XLSX (or fallback): render the full sheet with no active block highlight.
+  const sheets = side === 'argus' ? state.result.argusSheets : state.result.clientSheets
+  if (sheets?.length) {
+    host.innerHTML = note
+    const sheetHost = document.createElement('div')
+    sheetHost.style.cssText = 'position:relative'
+    host.appendChild(sheetHost)
+    renderXlsxSheet(sheetHost, sheets[0], match, side, [], {})
+    log('renderFullDocSide.done.xlsx', { side })
+    return
+  }
+  host.innerHTML = note + `<div style="padding:20px;color:#9ca3af">No source document available to display for this side.</div>`
 }
 
 // ─── XLSX → styled HTML table renderer (faithful to original Excel) ─

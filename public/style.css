@@ -1163,6 +1163,14 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
 }
 .finding-note.needs-comment::placeholder { color: #dc2626; }
 
+.fulldoc-note {
+  position: sticky; top: 0; z-index: 2;
+  background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+  font-size: 12px; line-height: 1.4;
+}
+.fulldoc-pages { display: flex; flex-direction: column; align-items: center; }
+
 .evidence-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   margin-bottom: 14px;
@@ -1340,6 +1348,14 @@ body.no-highlight .pdf-reviewer-canvas .apple-template-table td.flagged { backgr
   display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
 }
 .guided-suite-label { font-weight: 800; font-size: 14px; color: #111827; }
+.guided-suite-label .gsl-pos {
+  display: inline-block; background: #111827; color: #fff;
+  border-radius: 6px; padding: 1px 7px; font-size: 12px; margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.guided-suite-label .gsl-suite { color: #374151; }
+.guided-suite-label .gsl-tenant { color: #b45309; }
+.guided-suite-label .gsl-side { color: #6b7280; font-weight: 600; font-size: 12px; }
 .guided-count { font-size: 12px; color: #6b7280; font-variant-numeric: tabular-nums; }
 .guided-bar-track {
   height: 8px; border-radius: 999px; background: #fde68a;
