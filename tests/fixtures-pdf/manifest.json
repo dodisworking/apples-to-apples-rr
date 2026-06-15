@@ -1,0 +1,66 @@
+[
+  {
+    "property": "Maple Plaza",
+    "dir": "maple-plaza",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "standard-grid"
+  },
+  {
+    "property": "Oak Center",
+    "dir": "oak-center",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "stacked-cards"
+  },
+  {
+    "property": "Pine Square",
+    "dir": "pine-square",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "abbrev-footnotes"
+  },
+  {
+    "property": "Cedar Commons",
+    "dir": "cedar-commons",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "two-line-compact"
+  },
+  {
+    "property": "Birch Plaza",
+    "dir": "birch-plaza",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "standard-grid"
+  },
+  {
+    "property": "Elm Court",
+    "dir": "elm-court",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "stacked-cards"
+  },
+  {
+    "property": "Willow Walk",
+    "dir": "willow-walk",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "abbrev-footnotes"
+  },
+  {
+    "property": "Aspen Row",
+    "dir": "aspen-row",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "two-line-compact"
+  }
+]

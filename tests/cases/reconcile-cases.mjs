@@ -234,7 +234,7 @@ export const CASES = [
         pr: { bp: 600000, ov: 0.06 } },                                                  // breakpoint → flag
       { suite: '500', name: 'Lush', ls: '1/1/2022', le: '12/31/2032', sqft: 1200, psf: 60,
         pr: { bp: 500000, ov: 0.07 } },                                                  // overage → flag
-      { suite: '600', name: 'AT&T', ls: '1/1/2020', le: '12/31/2030', sqft: 10000, psf: 10, ann: 105000 }, // annual total drift → flag
+      { suite: '600', name: 'AT&T', ls: '1/1/2020', le: '12/31/2030', sqft: 10000, ann: 105000 }, // annual-only; rate drift shows on BOTH psf & annual axes → flag
     ]),
     expect: {
       findings: [
@@ -244,6 +244,7 @@ export const CASES = [
         { suite: '400', field: 'pct_rent_breakpoint' },
         { suite: '500', field: 'pct_rent_overage' },
         { suite: '600', field: 'base_rent_annual' },
+        { suite: '600', field: 'base_rent_psf' }, // same rate diff shows on both axes (cf. Oak Center 400)
       ],
       allowSoft: [],
       argusOnly: [],

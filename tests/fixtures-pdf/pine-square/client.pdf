@@ -1,0 +1,64 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1675 >>
+stream
+BT /F2 13 Tf 1 0 0 1 40.00 740.00 Tm (Pine Square Rent Roll) Tj ET
+BT /F2 8 Tf 1 0 0 1 40.00 720.00 Tm (Ste) Tj ET
+BT /F2 8 Tf 1 0 0 1 80.00 720.00 Tm (Tenant) Tj ET
+BT /F2 8 Tf 1 0 0 1 250.00 720.00 Tm (RSF) Tj ET
+BT /F2 8 Tf 1 0 0 1 300.00 720.00 Tm (LCD) Tj ET
+BT /F2 8 Tf 1 0 0 1 360.00 720.00 Tm (LXD) Tj ET
+BT /F2 8 Tf 1 0 0 1 420.00 720.00 Tm (Min Rent) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 702.00 Tm (100) Tj ET
+BT /F1 8 Tf 1 0 0 1 80.00 702.00 Tm (Old Navy) Tj ET
+BT /F1 8 Tf 1 0 0 1 250.00 702.00 Tm (15,000) Tj ET
+BT /F1 8 Tf 1 0 0 1 300.00 702.00 Tm (1/1/2022) Tj ET
+BT /F1 8 Tf 1 0 0 1 360.00 702.00 Tm (12/31/2032) Tj ET
+BT /F1 8 Tf 1 0 0 1 420.00 702.00 Tm ($27/SF/yr \(1\)) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 686.00 Tm (200) Tj ET
+BT /F1 8 Tf 1 0 0 1 80.00 686.00 Tm (Chipotle) Tj ET
+BT /F1 8 Tf 1 0 0 1 250.00 686.00 Tm (2,400) Tj ET
+BT /F1 8 Tf 1 0 0 1 300.00 686.00 Tm (5/1/2023) Tj ET
+BT /F1 8 Tf 1 0 0 1 360.00 686.00 Tm (4/30/2033) Tj ET
+BT /F1 8 Tf 1 0 0 1 420.00 686.00 Tm ($45/SF/yr \(2\)) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 670.00 Tm (300) Tj ET
+BT /F1 8 Tf 1 0 0 1 80.00 670.00 Tm (Macys) Tj ET
+BT /F1 8 Tf 1 0 0 1 250.00 670.00 Tm (80,000) Tj ET
+BT /F1 8 Tf 1 0 0 1 300.00 670.00 Tm (1/1/2015) Tj ET
+BT /F1 8 Tf 1 0 0 1 360.00 670.00 Tm (12/31/2035) Tj ET
+BT /F1 8 Tf 1 0 0 1 420.00 670.00 Tm ($6/SF/yr \(3\)) Tj ET
+BT /F2 9 Tf 1 0 0 1 40.00 644.00 Tm (NOTES  Rent Steps & Concessions) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 628.00 Tm (\(1\) Ste 100: 1/1/2027 ’ $27/SF/yr) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 616.00 Tm (\(2\) Ste 200: free rent 5/1/2026: 3 mo free) Tj ET
+BT /F1 8 Tf 1 0 0 1 40.00 604.00 Tm (\(3\) Ste 300: % Rent: breakpoint $500,000 @ 6%) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000314 00000 n 
+0000000450 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2176
+%%EOF

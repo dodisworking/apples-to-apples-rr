@@ -10,7 +10,9 @@
     "test:reconcile": "node tests/run-reconcile.mjs",
     "test:reconcile:v": "node tests/run-reconcile.mjs --verbose",
     "fixtures:gen": "node tests/gen-fixtures.mjs",
-    "test:e2e": "node tests/run-e2e.mjs"
+    "fixtures:gen:pdf": "node tests/gen-pdf-fixtures.mjs",
+    "test:e2e": "node tests/run-e2e.mjs",
+    "test:e2e:pdf": "PDF=1 node tests/run-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

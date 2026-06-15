@@ -1,0 +1,11 @@
+{
+  "name": "Maple Plaza — representation noise (must be clean)",
+  "property": "Maple Plaza",
+  "clientStyle": "standard-grid",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

@@ -1,6 +1,7 @@
 {
   "name": "Birch Plaza — more real discrepancies (must flag)",
   "property": "Birch Plaza",
+  "clientStyle": "standard-grid",
   "expect": {
     "findings": [
       {

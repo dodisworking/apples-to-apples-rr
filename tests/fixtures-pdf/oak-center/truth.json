@@ -1,0 +1,36 @@
+{
+  "name": "Oak Center — real discrepancies (must flag)",
+  "property": "Oak Center",
+  "clientStyle": "stacked-cards",
+  "expect": {
+    "findings": [
+      {
+        "suite": "100",
+        "field": "sqft"
+      },
+      {
+        "suite": "200",
+        "field": "rent_step_amount"
+      },
+      {
+        "suite": "300",
+        "field": "lease_end"
+      },
+      {
+        "suite": "400",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "400",
+        "field": "base_rent_annual"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [
+      "500"
+    ],
+    "clientOnly": [
+      "600"
+    ]
+  }
+}

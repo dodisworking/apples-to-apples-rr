@@ -23,7 +23,11 @@ import { fileURLToPath } from 'node:url'
 import { normalizeSuite } from '../lib/argus.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIX = path.join(__dirname, 'fixtures')
+// Pick the fixture set: xlsx clients (default) or PDF clients (PDF=1 / FIXDIR=...).
+// The harness is format-agnostic — /api/compare dispatches by filename extension —
+// so the SAME scoring drives both. Set PDF=1 to pressure-test the PDF path.
+const FIXDIR = process.env.FIXDIR || (process.env.PDF ? 'fixtures-pdf' : 'fixtures')
+const FIX = path.join(__dirname, FIXDIR)
 const BASE = process.env.BASE || 'http://localhost:3790'
 const MODE = process.env.MODE || 'regular'
 
@@ -121,11 +125,12 @@ let manifest
 try {
   manifest = JSON.parse(await fs.readFile(path.join(FIX, 'manifest.json'), 'utf8'))
 } catch {
-  console.error(bad('No fixtures found. Run `node tests/gen-fixtures.mjs` first.'))
+  const gen = FIXDIR === 'fixtures-pdf' ? 'gen-pdf-fixtures.mjs' : 'gen-fixtures.mjs'
+  console.error(bad(`No fixtures found in ${FIXDIR}/. Run \`node tests/${gen}\` first.`))
   process.exit(2)
 }
 
-console.log(`${C.bold}E2E against ${BASE}${C.reset}  (mode=${MODE}, ${manifest.length} fixtures)\n`)
+console.log(`${C.bold}E2E against ${BASE}${C.reset}  (mode=${MODE}, set=${FIXDIR}, ${manifest.length} fixtures)\n`)
 
 let totalTP = 0, totalFP = 0, totalFN = 0, failedCases = 0, errored = 0
 for (const entry of manifest) {

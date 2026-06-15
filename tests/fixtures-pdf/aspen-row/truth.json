@@ -1,0 +1,24 @@
+{
+  "name": "Aspen Row — name/suite/SF discrepancies (must flag)",
+  "property": "Aspen Row",
+  "clientStyle": "two-line-compact",
+  "expect": {
+    "findings": [
+      {
+        "suite": "100",
+        "field": "tenant_name"
+      },
+      {
+        "suite": "1",
+        "field": "suite"
+      },
+      {
+        "suite": "300",
+        "field": "sqft"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

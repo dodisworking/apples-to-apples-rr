@@ -1,0 +1,14 @@
+{
+  "name": "Elm Court — exclusions & one-sided % rent (clean + note)",
+  "property": "Elm Court",
+  "clientStyle": "stacked-cards",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": [],
+    "notesInclude": [
+      "Percentage Rent"
+    ]
+  }
+}

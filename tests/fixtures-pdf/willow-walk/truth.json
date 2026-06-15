@@ -1,0 +1,11 @@
+{
+  "name": "Willow Walk — date/name/suite formatting (must be clean)",
+  "property": "Willow Walk",
+  "clientStyle": "abbrev-footnotes",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}
