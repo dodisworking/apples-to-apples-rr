@@ -1,0 +1,11 @@
+{
+  "name": "Magnolia Crossing — representation noise (must be clean)",
+  "property": "Magnolia Crossing",
+  "clientStyle": "standard-grid",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

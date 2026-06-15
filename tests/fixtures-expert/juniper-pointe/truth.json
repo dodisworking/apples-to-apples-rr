@@ -1,0 +1,36 @@
+{
+  "name": "Juniper Pointe — real discrepancies (must flag)",
+  "property": "Juniper Pointe",
+  "clientStyle": "stacked-cards",
+  "expect": {
+    "findings": [
+      {
+        "suite": "200",
+        "field": "sqft"
+      },
+      {
+        "suite": "210",
+        "field": "rent_step_amount"
+      },
+      {
+        "suite": "220",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "220",
+        "field": "base_rent_annual"
+      },
+      {
+        "suite": "230",
+        "field": "lease_end"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [
+      "240"
+    ],
+    "clientOnly": [
+      "250"
+    ]
+  }
+}

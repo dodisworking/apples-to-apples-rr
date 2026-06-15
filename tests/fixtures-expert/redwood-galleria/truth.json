@@ -1,0 +1,34 @@
+{
+  "name": "Redwood Galleria — dense real discrepancies (must flag)",
+  "property": "Redwood Galleria",
+  "clientStyle": "abbrev-footnotes",
+  "expect": {
+    "findings": [
+      {
+        "suite": "700",
+        "field": "sqft"
+      },
+      {
+        "suite": "710",
+        "field": "lease_start"
+      },
+      {
+        "suite": "720",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "720",
+        "field": "base_rent_annual"
+      },
+      {
+        "suite": "730",
+        "field": "rent_step_amount"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [
+      "740"
+    ],
+    "clientOnly": []
+  }
+}

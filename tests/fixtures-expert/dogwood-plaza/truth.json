@@ -1,0 +1,16 @@
+{
+  "name": "Dogwood Plaza — one-sided percent rent & step date",
+  "property": "Dogwood Plaza",
+  "clientStyle": "standard-grid",
+  "expect": {
+    "findings": [
+      {
+        "suite": "920",
+        "field": "rent_step_date"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

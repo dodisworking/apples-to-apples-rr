@@ -1,0 +1,11 @@
+{
+  "name": "Chestnut Walk — representation noise (must be clean)",
+  "property": "Chestnut Walk",
+  "clientStyle": "stacked-cards",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

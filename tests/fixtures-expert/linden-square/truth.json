@@ -1,0 +1,21 @@
+{
+  "name": "Linden Square — suite & name normalization",
+  "property": "Linden Square",
+  "clientStyle": "standard-grid",
+  "expect": {
+    "findings": [
+      {
+        "suite": "510",
+        "field": "suite"
+      }
+    ],
+    "allowSoft": [
+      {
+        "suite": "520",
+        "field": "tenant_name"
+      }
+    ],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

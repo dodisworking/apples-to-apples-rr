@@ -1,0 +1,24 @@
+{
+  "name": "Sycamore Station — percent rent & free rent (mixed)",
+  "property": "Sycamore Station",
+  "clientStyle": "abbrev-footnotes",
+  "expect": {
+    "findings": [
+      {
+        "suite": "310",
+        "field": "pct_rent_breakpoint"
+      },
+      {
+        "suite": "320",
+        "field": "pct_rent_overage"
+      },
+      {
+        "suite": "340",
+        "field": "free_rent_count"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

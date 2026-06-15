@@ -24,14 +24,19 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CASES } from './cases/reconcile-cases.mjs'
 import { buildArgusRows, writeXlsx, slug } from './lib/fixture-builders.mjs'
 import { buildClientPdf } from './lib/pdf-layouts.mjs'
 import { parseXlsx, parsePdf } from '../lib/parsers.js'
 import { parseArgusFromSheets } from '../lib/argus.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIX = path.join(__dirname, 'fixtures-pdf')
+// Which answer key + output dir? Defaults to the original set; override with env
+// to build the "expert" pressure-test set:
+//   CASES=./cases/expert-cases.mjs OUTDIR=fixtures-expert node tests/gen-pdf-fixtures.mjs
+const CASES_MODULE = process.env.CASES || './cases/reconcile-cases.mjs'
+const OUTDIR = process.env.OUTDIR || 'fixtures-pdf'
+const { CASES } = await import(CASES_MODULE)
+const FIX = path.join(__dirname, OUTDIR)
 
 // ── Argus round-trip self-check (identical intent to gen-fixtures.mjs) ──
 async function verifyArgus(file, expectedTenants) {

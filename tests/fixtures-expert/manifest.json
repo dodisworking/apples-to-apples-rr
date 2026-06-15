@@ -1,0 +1,82 @@
+[
+  {
+    "property": "Magnolia Crossing",
+    "dir": "magnolia-crossing",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "standard-grid"
+  },
+  {
+    "property": "Juniper Pointe",
+    "dir": "juniper-pointe",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "stacked-cards"
+  },
+  {
+    "property": "Sycamore Station",
+    "dir": "sycamore-station",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "abbrev-footnotes"
+  },
+  {
+    "property": "Hawthorne Yards",
+    "dir": "hawthorne-yards",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "two-line-compact"
+  },
+  {
+    "property": "Linden Square",
+    "dir": "linden-square",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "standard-grid"
+  },
+  {
+    "property": "Chestnut Walk",
+    "dir": "chestnut-walk",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "stacked-cards"
+  },
+  {
+    "property": "Redwood Galleria",
+    "dir": "redwood-galleria",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "abbrev-footnotes"
+  },
+  {
+    "property": "Cypress Corners",
+    "dir": "cypress-corners",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "two-line-compact"
+  },
+  {
+    "property": "Dogwood Plaza",
+    "dir": "dogwood-plaza",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "standard-grid"
+  },
+  {
+    "property": "Sequoia Marketplace",
+    "dir": "sequoia-marketplace",
+    "argus": "argus.xlsx",
+    "client": "client.pdf",
+    "truth": "truth.json",
+    "style": "stacked-cards"
+  }
+]

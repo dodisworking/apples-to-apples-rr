@@ -1,0 +1,16 @@
+{
+  "name": "Cypress Corners — free rent forms",
+  "property": "Cypress Corners",
+  "clientStyle": "two-line-compact",
+  "expect": {
+    "findings": [
+      {
+        "suite": "830",
+        "field": "free_rent"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

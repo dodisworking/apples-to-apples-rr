@@ -1,0 +1,33 @@
+{
+  "name": "Hawthorne Yards — rent step subtleties",
+  "property": "Hawthorne Yards",
+  "clientStyle": "two-line-compact",
+  "expect": {
+    "findings": [
+      {
+        "suite": "410",
+        "field": "rent_step_date"
+      },
+      {
+        "suite": "420",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "420",
+        "field": "base_rent_annual"
+      }
+    ],
+    "allowSoft": [
+      {
+        "suite": "430",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "430",
+        "field": "rent_step_unmatched"
+      }
+    ],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

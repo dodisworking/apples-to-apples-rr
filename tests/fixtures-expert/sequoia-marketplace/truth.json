@@ -1,0 +1,35 @@
+{
+  "name": "Sequoia Marketplace — comprehensive mix",
+  "property": "Sequoia Marketplace",
+  "clientStyle": "stacked-cards",
+  "expect": {
+    "findings": [
+      {
+        "suite": "1010",
+        "field": "sqft"
+      },
+      {
+        "suite": "1030",
+        "field": "rent_step_amount"
+      },
+      {
+        "suite": "1040",
+        "field": "base_rent_psf"
+      },
+      {
+        "suite": "1040",
+        "field": "base_rent_annual"
+      }
+    ],
+    "allowSoft": [
+      {
+        "suite": "1020",
+        "field": "tenant_name"
+      }
+    ],
+    "argusOnly": [],
+    "clientOnly": [
+      "1050"
+    ]
+  }
+}
