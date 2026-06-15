@@ -1,0 +1,35 @@
+{
+  "name": "Birch Plaza — more real discrepancies (must flag)",
+  "property": "Birch Plaza",
+  "expect": {
+    "findings": [
+      {
+        "suite": "100",
+        "field": "rent_step_date"
+      },
+      {
+        "suite": "200",
+        "field": "free_rent"
+      },
+      {
+        "suite": "300",
+        "field": "free_rent_count"
+      },
+      {
+        "suite": "400",
+        "field": "pct_rent_breakpoint"
+      },
+      {
+        "suite": "500",
+        "field": "pct_rent_overage"
+      },
+      {
+        "suite": "600",
+        "field": "base_rent_annual"
+      }
+    ],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

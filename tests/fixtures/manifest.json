@@ -1,0 +1,58 @@
+[
+  {
+    "property": "Maple Plaza",
+    "dir": "maple-plaza",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Oak Center",
+    "dir": "oak-center",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Pine Square",
+    "dir": "pine-square",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Cedar Commons",
+    "dir": "cedar-commons",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Birch Plaza",
+    "dir": "birch-plaza",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Elm Court",
+    "dir": "elm-court",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Willow Walk",
+    "dir": "willow-walk",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  },
+  {
+    "property": "Aspen Row",
+    "dir": "aspen-row",
+    "argus": "argus.xlsx",
+    "client": "client.xlsx",
+    "truth": "truth.json"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "name": "Cedar Commons — more representation noise (must be clean)",
+  "property": "Cedar Commons",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

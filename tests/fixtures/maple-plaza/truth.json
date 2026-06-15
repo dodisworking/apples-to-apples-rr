@@ -1,0 +1,10 @@
+{
+  "name": "Maple Plaza — representation noise (must be clean)",
+  "property": "Maple Plaza",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

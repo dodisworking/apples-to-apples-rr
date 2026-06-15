@@ -1,0 +1,15 @@
+{
+  "name": "Pine Square — tricky but clean",
+  "property": "Pine Square",
+  "expect": {
+    "findings": [],
+    "allowSoft": [
+      {
+        "suite": "100",
+        "field": "base_rent_psf"
+      }
+    ],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}

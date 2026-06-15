@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test:reconcile": "node tests/run-reconcile.mjs",
+    "test:reconcile:v": "node tests/run-reconcile.mjs --verbose",
+    "fixtures:gen": "node tests/gen-fixtures.mjs",
+    "test:e2e": "node tests/run-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

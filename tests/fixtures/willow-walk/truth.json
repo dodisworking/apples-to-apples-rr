@@ -1,0 +1,10 @@
+{
+  "name": "Willow Walk — date/name/suite formatting (must be clean)",
+  "property": "Willow Walk",
+  "expect": {
+    "findings": [],
+    "allowSoft": [],
+    "argusOnly": [],
+    "clientOnly": []
+  }
+}
