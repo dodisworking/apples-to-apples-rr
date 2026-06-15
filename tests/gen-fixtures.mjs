@@ -20,122 +20,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ExcelJS from 'exceljs'
 import { CASES } from './cases/reconcile-cases.mjs'
 import { parseXlsx } from '../lib/parsers.js'
 import { parseArgusFromSheets } from '../lib/argus.js'
+// Single source of truth for the fixture row builders — shared with the PDF
+// generator so the xlsx + pdf client rolls never drift apart (the % rent column
+// regression came from this file keeping its own stale copy of buildClientRows).
+import { buildArgusRows, buildClientRows, writeXlsx, slug } from './lib/fixture-builders.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIX = path.join(__dirname, 'fixtures')
-const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-const COLS = 18
-const blankRow = () => Array(COLS).fill('')
-
-// ── Build the Argus Lease Summary Report rows (matches lib/argus.js layout) ──
-function buildArgusRows(property, tenants) {
-  const rows = []
-  rows.push(['Lease Summary Report', ...Array(COLS - 1).fill('')])
-  rows.push([property, ...Array(COLS - 1).fill('')])
-  rows.push(['As of 1/1/2026', ...Array(COLS - 1).fill('')])
-  rows.push(['All Tenants', ...Array(COLS - 1).fill('')])
-  rows.push(blankRow())
-  // header block (rows 5-6) — must contain "Building Share" for sheet detection
-  const h1 = blankRow()
-  h1[0] = 'General Tenant Info'; h1[1] = 'Initial Area'; h1[2] = 'Status'; h1[3] = 'Rent Details'
-  h1[4] = 'Rent Step Date'; h1[5] = 'Step $/SF/Yr'; h1[6] = 'Step $/SF/Mo'; h1[8] = 'Free Rent Date'
-  h1[9] = 'Free Rent'; h1[10] = '% Rent'; h1[17] = 'Renewal Assumption'
-  rows.push(h1)
-  const h2 = blankRow(); h2[1] = 'Building Share %'; rows.push(h2)
-  rows.push(blankRow()); rows.push(blankRow()); rows.push(blankRow()); rows.push(blankRow())
-  rows.push(blankRow()) // index 11 (blank) — data begins at index 12
-
-  let n = 0
-  for (const t of tenants) {
-    n++
-    const r0 = blankRow(), r1 = blankRow(), r2 = blankRow(), r3 = blankRow(), r4 = blankRow()
-    // Col 0 stacked id
-    r0[0] = `${n}. ${t.name}`
-    r1[0] = `Suite: ${t.suite ?? ''}`
-    if (t.leaseStart && t.leaseEnd) r2[0] = `${t.leaseStart} - ${t.leaseEnd}`
-    r3[0] = '10 yr'           // lease term (cosmetic)
-    r4[0] = 'In-Place'        // tenure (cosmetic)
-    // Col 1 SF / building share
-    if (t.sqft != null) r0[1] = t.sqft
-    r1[1] = ''               // building share % (ignored by reconcile)
-    // Col 2 status
-    r0[2] = t.isOption ? 'Option' : 'Base'
-    // Col 3 base rent (four equivalent reps)
-    if (t.baseRent?.psfAnnual != null)    r0[3] = t.baseRent.psfAnnual
-    if (t.baseRent?.annualTotal != null)  r1[3] = t.baseRent.annualTotal
-    if (t.baseRent?.psfMonthly != null)   r2[3] = t.baseRent.psfMonthly
-    if (t.baseRent?.monthlyTotal != null) r3[3] = t.baseRent.monthlyTotal
-    // Cols 4-6 rent steps (one per row, top-down)
-    const blockRows = [r0, r1, r2, r3, r4]
-    ;(t.rentSteps || []).forEach((s, i) => {
-      const rr = blockRows[i] || blockRows[blockRows.length - 1]
-      if (s.effectiveDate) rr[4] = s.effectiveDate
-      if (s.psfAnnual != null) rr[5] = s.psfAnnual
-      if (s.psfMonthly != null) rr[6] = s.psfMonthly
-    })
-    // Cols 8-9 free rent (first period on r0; additional on following rows)
-    ;(t.freeRent || []).forEach((f, i) => {
-      const rr = blockRows[i] || blockRows[blockRows.length - 1]
-      if (f.startDate) rr[8] = f.startDate
-      if (f.months != null) rr[9] = f.months
-      else if (f.abatementPct != null) rr[9] = f.abatementPct
-    })
-    // Col 10 % rent: row0 salesVolume(blank), row1 breakpoint, row2 overage
-    if (t.percentRent) {
-      if (t.percentRent.breakpoint != null) r1[10] = t.percentRent.breakpoint
-      if (t.percentRent.overagePct != null) r2[10] = t.percentRent.overagePct
-    }
-    // Col 17 reabsorbed
-    if (t.isReabsorbed) r0[17] = 'Reabsorb'
-    rows.push(r0, r1, r2, r3, r4, blankRow())
-  }
-  return rows
-}
-
-// ── Build the client rent roll (different layout + representation) ──
-function buildClientRows(property, tenants) {
-  const rows = []
-  rows.push([`${property} — Rent Roll`, '', '', '', '', '', '', ''])
-  rows.push(['As of January 1, 2026', '', '', '', '', '', '', ''])
-  rows.push([])
-  rows.push(['Unit', 'Tenant Name', 'Sq. Ft.', 'Lease Start', 'Lease End', 'Base Rent', 'Rent Basis', 'Rent Steps'])
-  for (const t of tenants) {
-    if (t.isOption) continue // client rolls usually omit option blocks
-    const br = t.baseRent || {}
-    let amount = '', basis = ''
-    if (br.monthlyTotal != null)      { amount = br.monthlyTotal; basis = '$/month' }
-    else if (br.annualTotal != null)  { amount = br.annualTotal;  basis = '$/year' }
-    else if (br.psfMonthly != null)   { amount = br.psfMonthly;   basis = '$/SF/month' }
-    else if (br.psfAnnual != null)    { amount = br.psfAnnual;    basis = '$/SF/year' }
-    const steps = (t.rentSteps || []).map(s => {
-      if (s.monthlyTotal != null) return `${s.effectiveDate}: $${s.monthlyTotal}/mo`
-      if (s.annualTotal != null)  return `${s.effectiveDate}: $${s.annualTotal}/yr`
-      if (s.psfMonthly != null)   return `${s.effectiveDate}: $${s.psfMonthly}/SF/mo`
-      if (s.psfAnnual != null)    return `${s.effectiveDate}: $${s.psfAnnual}/SF/yr`
-      return s.effectiveDate || ''
-    }).join('; ')
-    const free = (t.freeRent || []).map(f =>
-      `${f.startDate}: ${f.months != null ? f.months + ' months free' : (f.abatementPct * 100) + '% abatement'}`
-    ).join('; ')
-    rows.push([
-      t.suite ?? '', t.name ?? '', t.sqft ?? '',
-      t.leaseStart ?? '', t.leaseEnd ?? '',
-      amount, basis, steps + (free ? `  |  Free Rent: ${free}` : ''),
-    ])
-  }
-  return rows
-}
-
-async function writeXlsx(file, rows) {
-  const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('Sheet1')
-  for (const r of rows) ws.addRow(r)
-  await wb.xlsx.writeFile(file)
-}
 
 // ── Round-trip self-check: parse generated argus.xlsx and compare to intent ──
 async function verifyArgus(file, expectedTenants) {
