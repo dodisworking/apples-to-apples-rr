@@ -122,11 +122,30 @@ app.post('/api/compare', async (req, res) => {
     emit('progress', { stage: 'parsing-argus', pct: 8, msg: 'Parsing Argus rent roll…' })
     const argusBuf = Buffer.from(argus.base64, 'base64')
     const parsedArgus = await parseFile(argusBuf, argus.name)
-    const argusParsed = parseArgusFromSheets(parsedArgus.sheets)
-    console.log(`[compare] argus: ${argusParsed.tenants.length} tenants, ${argusParsed.totalSF.toLocaleString()} SF`)
+    let argusParsed
+    if (parsedArgus.type === 'xlsx') {
+      // Canonical path: a real Argus "Lease Summary Report" workbook parses
+      // deterministically (5-row blocks) — no LLM needed.
+      argusParsed = parseArgusFromSheets(parsedArgus.sheets)
+    } else {
+      // Argus exported as PDF/CSV/text (no spreadsheet grid). Standardize it with
+      // the SAME LLM normalizer the client side uses — it emits the identical
+      // canonical schema — then derive total SF the way the xlsx parser does.
+      const norm = await withHeartbeat(
+        'parsing-argus', 14,
+        '🤖 Argus is a PDF — Claude is reading the Argus Lease Summary Report (20-60s)…',
+        () => normalizeClient({ parsed: parsedArgus, filename: argus.name, model: m })
+      )
+      const tenants = norm.tenants || []
+      const totalSF = tenants
+        .filter(t => !t.isOption && !t.isReabsorbed && t.sqft)
+        .reduce((s, t) => s + t.sqft, 0)
+      argusParsed = { property: norm.property || null, tenants, totalSF }
+    }
+    console.log(`[compare] argus: ${argusParsed.tenants.length} tenants, ${(argusParsed.totalSF || 0).toLocaleString()} SF`)
 
     if (!argusParsed.tenants?.length) {
-      throw new Error('Argus rent roll parsed empty — make sure the 🍎 Apples slot contains an Argus Lease Summary Report (xlsx). If you uploaded the files in the wrong slots, click ✕ and swap.')
+      throw new Error('Argus rent roll parsed empty — make sure the 🍎 Apples slot contains an Argus Lease Summary Report. If you uploaded the files in the wrong slots, click ✕ and swap.')
     }
 
     // ── Step 2: parse client (Pear) ──────────────────────
