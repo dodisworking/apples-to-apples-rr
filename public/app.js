@@ -108,7 +108,9 @@ function handleFile(file, key, slot, nameEl) {
   state[key] = file
   slot.classList.add('filled')
   nameEl.textContent = file.name
-  $('#goDetect').disabled = !(state.fileA && state.fileB)
+  const ready = !(state.fileA && state.fileB)
+  $('#goDetect').disabled = ready
+  const ax = $('#goAutoExport'); if (ax) ax.disabled = ready
 }
 wireDrop('#slotA', '#inputA', '#nameA', 'fileA')
 wireDrop('#slotB', '#inputB', '#nameB', 'fileB')
@@ -118,8 +120,7 @@ wireDrop('#slotB', '#inputB', '#nameB', 'fileB')
 // Auto-detect runs only as a silent sanity check — if a high-confidence mismatch
 // is found (e.g. user dropped argus in the pear slot) we show a one-tap swap before
 // committing tokens to the analysis.
-$('#goDetect').addEventListener('click', async () => {
-  const btn = $('#goDetect')
+async function detectAndAnalyze(btn, restoreText) {
   btn.disabled = true; btn.textContent = 'Sniffing…'
 
   // Default: trust the slot labels
@@ -152,8 +153,19 @@ $('#goDetect').addEventListener('click', async () => {
     }
   } catch { /* silent — don't block analysis on detect failure */ }
 
-  btn.disabled = false; btn.textContent = 'Continue →'
+  btn.disabled = false; btn.textContent = restoreText
   startAnalysis()
+}
+
+$('#goDetect').addEventListener('click', () => {
+  state.autoExport = false
+  detectAndAnalyze($('#goDetect'), 'Continue →')
+})
+
+// ⚡ Auto export — run the whole model, then download the Excel automatically.
+$('#goAutoExport').addEventListener('click', () => {
+  state.autoExport = true
+  detectAndAnalyze($('#goAutoExport'), '⚡ Auto export Excel')
 })
 
 async function startAnalysis() {
@@ -312,6 +324,12 @@ function onComplete(payload) {
   // Land the reviewer straight into the guided suite-by-suite cross-reference
   // (the side-by-side table stays behind it as an overview / fallback).
   setTimeout(() => { try { openGuided(0) } catch (e) { log('openGuided.error', { msg: String(e) }) } }, 50)
+  // ⚡ Auto-export mode: the user asked for the finished Excel, not a review session.
+  // Download it the moment it's ready (review stage still shows behind, as a bonus).
+  if (state.autoExport) {
+    state.autoExport = false
+    setTimeout(() => { try { saveXlsx(state.excelBase64, state.excelFilename) } catch (e) { log('autoExport.error', { msg: String(e) }) } }, 100)
+  }
 }
 
 function renderReview() {
@@ -2751,6 +2769,8 @@ $('#restart').addEventListener('click', () => {
   $('#nameA').textContent = ''; $('#nameB').textContent = ''
   $('#inputA').value = '';      $('#inputB').value = ''
   $('#goDetect').disabled = true
+  const ax = $('#goAutoExport'); if (ax) ax.disabled = true
+  state.autoExport = false
   pdfCache.clear()
   showStage('stage-upload')
 })
