@@ -224,7 +224,10 @@ $('#backToUpload').addEventListener('click', () => showStage('stage-upload'))
 
 // ═══ Process / Compare ════════════════════════════════
 let elapsedTimer = null, stallTimer = null, processStart = 0, lastProgress = 0
-const STALL_MS = 240000
+// Watchdog: the server pings every 15s and consumeSSE resets lastProgress on
+// ANY bytes, so this only trips when the socket is truly dead (e.g. the server
+// redeployed mid-run). 5 min of total silence is a safe "connection is gone".
+const STALL_MS = 300000
 
 // (Old goCompare confirm-stage button removed — Continue now starts analysis directly.)
 $('#goCompare')?.addEventListener('click', startAnalysis)
@@ -244,7 +247,7 @@ function startTimers() {
     if (Date.now() - lastProgress > STALL_MS) {
       state.abort?.abort()
       stopTimers()
-      alert('Stalled — no progress in 4 minutes. Try again.')
+      alert('The connection went quiet for 5 minutes — the server may have restarted. Please try again.')
       showStage('stage-upload')
     }
   }, 5000)
@@ -258,9 +261,14 @@ async function consumeSSE(stream) {
   const reader = stream.getReader()
   const dec = new TextDecoder()
   let buf = ''
+  let gotTerminal = false
   while (true) {
     const { value, done } = await reader.read()
     if (done) break
+    // ANY bytes from the server mean the connection is alive — reset the stall
+    // watchdog. The server sends a keep-alive ping every 15s, so a live run can
+    // never false-trip the timer; it only fires if the socket truly goes dark.
+    lastProgress = Date.now()
     buf += dec.decode(value, { stream: true })
     let idx
     while ((idx = buf.indexOf('\n\n')) >= 0) {
@@ -273,10 +281,17 @@ async function consumeSSE(stream) {
       if (!data) continue
       let p
       try { p = JSON.parse(data) } catch { continue }
-      if (ev === 'progress') { lastProgress = Date.now(); updateProgress(p) }
-      else if (ev === 'complete') { lastProgress = Date.now(); onComplete(p); return }
-      else if (ev === 'error') { alert('Kitchen error: ' + p.error); showStage('stage-upload'); return }
+      if (ev === 'progress') { updateProgress(p) }
+      else if (ev === 'complete') { gotTerminal = true; onComplete(p); return }
+      else if (ev === 'error') { gotTerminal = true; alert('Kitchen error: ' + p.error); showStage('stage-upload'); return }
     }
+  }
+  // Stream ended without a complete/error event — usually the server restarted
+  // (a deploy) or the connection dropped mid-run. Tell the user plainly instead
+  // of stranding them on the processing screen.
+  if (!gotTerminal) {
+    alert('The connection dropped before the report finished — this usually means the server was redeploying. Please try again in a moment.')
+    showStage('stage-upload')
   }
 }
 
