@@ -333,4 +333,45 @@ export const CASES = [
       clientOnly: [],
     },
   },
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CASE 9 — "702 Oberlin": standard accounting rent roll. The client roll
+  // prefixes EVERY suite with the building code "OR702-" (OR702-220, OR702-PRK).
+  // For a single-building Argus roll that prefix is noise — none of the matched
+  // suites should flag a "suite" discrepancy. Real diffs (a re-tenanted suite,
+  // an amenity end-date) MUST still flag. 0-SF parking suites that exist only on
+  // the client roll are MISC-REVENUE rows: reported as client-only (LOW), never
+  // dropped. Drawn from the first real lawyer-reviewed reconciliation.
+  // ═══════════════════════════════════════════════════════════════════════
+  {
+    name: '702 Oberlin — building-prefix suites + misc-revenue parking',
+    argus: prop('702 Oberlin', [
+      { suite: '220',  name: 'Aligned Technology Group, Inc', ls: '1/1/2020', le: '12/31/2030', sqft: 5000, psf: 30 },
+      { suite: '110',  name: 'Atlantic Union Bank',           ls: '6/1/2019', le: '5/31/2031',  sqft: 8000, psf: 28 },
+      { suite: '415',  name: 'BB&M Architecture, PLLC',       ls: '3/1/2021', le: '2/28/2031',  sqft: 3000, psf: 25 },
+      // Amenity suite: Argus assumes a 100-yr term; client shows the real term.
+      { suite: '400C', name: 'zz AMENITY - Conference Room',  ls: '8/1/2025', le: '7/31/2125',  sqft: 500,  psf: 10 },
+      // Suite re-tenanted: Argus assumes a Pickett expansion, client still shows CRMNEXT.
+      { suite: '200',  name: 'Pickett and Associates, LLC (St 200 Expansion)', ls: '7/1/2024', le: '5/31/2030', sqft: 3758, psf: 36 },
+    ]),
+    client: client([
+      { suite: 'OR702-220',  name: 'Aligned Technology Group, Inc', ls: '1/1/2020', le: '12/31/2030', sqft: 5000, psf: 30 },
+      { suite: 'OR702-110',  name: 'Atlantic Union Bank',           ls: '6/1/2019', le: '5/31/2031',  sqft: 8000, psf: 28 },
+      { suite: 'OR702-415',  name: 'BB&M Architecture, PLLC',       ls: '3/1/2021', le: '2/28/2031',  sqft: 3000, psf: 25 },
+      { suite: 'OR702-400C', name: 'zz AMENITY - Conference Room',  ls: '8/1/2025', le: '12/31/2050', sqft: 500,  psf: 10 }, // lease_end real
+      { suite: 'OR702-200',  name: 'CRMNEXT, Inc.',                 ls: '7/1/2024', le: '5/31/2030', sqft: 3758, psf: 36 },  // tenant_name real
+      // 0-SF misc-revenue parking suites — client only, must be reported (not dropped).
+      { suite: 'OR702-PRK',  name: 'Will Houk',    ls: '5/1/2026', le: '11/30/2026', sqft: 0 },
+      { suite: 'OR702-PRK2', name: 'Von Wiltman',  ls: '9/1/2024', le: '2/28/2025',  sqft: 0 },
+    ]),
+    expect: {
+      findings: [
+        { suite: '200',  field: 'tenant_name' },
+        { suite: '400C', field: 'lease_end' },
+      ],
+      allowSoft: [],
+      argusOnly: [],
+      clientOnly: ['PRK', 'PRK2'],
+    },
+  },
 ]
